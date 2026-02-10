@@ -1,22 +1,25 @@
-[file name]: script.js
-[file content begin]
-// Firebase configuration
+// Import the functions you need from the SDKs you need
+import { initializeApp } from "firebase/app";
+import { getAnalytics } from "firebase/analytics";
+// TODO: Add SDKs for Firebase products that you want to use
+// https://firebase.google.com/docs/web/setup#available-libraries
+
+// Your web app's Firebase configuration
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
 const firebaseConfig = {
-  apiKey: "AIzaSyDWO_T0iL8K-CaF8haK0MYkdyOzpTR2CVo",
-  authDomain: "taqwa-7ddf2.firebaseapp.com",
-  projectId: "taqwa-7ddf2",
-  storageBucket: "taqwa-7ddf2.firebasestorage.app",
-  messagingSenderId: "1053737405036",
-  appId: "1:1053737405036:web:c9837bbd0ea0e9be612649",
-  measurementId: "G-6MZ4Z431MP",
-  databaseURL: "https://taqwa-7ddf2-default-rtdb.firebaseio.com/"
+  apiKey: "AIzaSyChoKGQzwMlLTw3d__sk3amo6Nh8RMGCX4",
+  authDomain: "taqwa-property-bd.firebaseapp.com",
+  databaseURL: "https://taqwa-property-bd-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "taqwa-property-bd",
+  storageBucket: "taqwa-property-bd.firebasestorage.app",
+  messagingSenderId: "266724049111",
+  appId: "1:266724049111:web:c4861c1f654539d1bdb092",
+  measurementId: "G-90D8VDC6X2"
 };
 
 // Initialize Firebase
-const app = firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
-const auth = firebase.auth();
-
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
 /* ============================================================
    IMS ERP V6.0 - FIREBASE EDITION
    ============================================================ */
