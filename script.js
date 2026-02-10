@@ -1,3 +1,31 @@
+<script type="module">
+  // Import the functions you need from the SDKs you need
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-analytics.js";
+  // TODO: Add SDKs for Firebase products that you want to use
+  // https://firebase.google.com/docs/web/setup#available-libraries
+
+  // Your web app's Firebase configuration
+  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+  const firebaseConfig = {
+    apiKey: "AIzaSyChoKGQzwMlLTw3d__sk3amo6Nh8RMGCX4",
+    authDomain: "taqwa-property-bd.firebaseapp.com",
+    databaseURL: "https://taqwa-property-bd-default-rtdb.asia-southeast1.firebasedatabase.app",
+    projectId: "taqwa-property-bd",
+    storageBucket: "taqwa-property-bd.firebasestorage.app",
+    messagingSenderId: "266724049111",
+    appId: "1:266724049111:web:c4861c1f654539d1bdb092",
+    measurementId: "G-90D8VDC6X2"
+  };
+
+  // Initialize Firebase
+  const app = initializeApp(firebaseConfig);
+  const analytics = getAnalytics(app);
+</script>
+
+
+
+
 /* ============================================================
    IMS ERP V5.1 FINAL - ULTRA ADVANCED (LOCALSTORAGE)
    Complete bug-free version with all features
