@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>IMS ERP V5 Firebase Edition</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<!-- LOADING SPINNER -->
+<div class="loading" id="loadingSpinner">
+  <div class="spinner"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toastWrap" id="toastWrap"></div>
+
+<!-- LOGIN -->
+<div id="loginPage" class="loginWrap">
+  <div class="loginCard">
+    <div class="loginGrid">
+      <div class="loginLeft">
+        <h1>IMS ERP V5 (Firebase Edition)</h1>
+        <p>
+          Professional Investment Management ERP System (Cloud Based) <br/>
+          <b>Firebase Realtime Database</b> | Multi Admin | Member System | Investment Profit | Voucher & Expense
+        </p>
+        <div class="hint">
+          <b>Default Admin Login:</b><br/>
+          ID: <b>ADM-001</b><br/>
+          Password: <b>admin123</b><br/><br/>
+          <b>Default Member Login:</b> (Demo)<br/>
+          ID: <b>FM-001</b> (Founder Member)<br/>
+          Password: <b>1234</b>
+        </div>
+        <div class="kpiBox">
+          <div class="kpi">✔ Multi Admin Role</div>
+          <div class="kpi">✔ Investment Profit System</div>
+          <div class="kpi">✔ Real-time Notifications</div>
+          <div class="kpi">✔ Cloud Data Backup</div>
+        </div>
+      </div>
+      <div class="loginRight">
+        <div class="tabs">
+          <button id="tabAdmin" class="active">Admin Login</button>
+          <button id="tabMember">Member Login</button>
+        </div>
+        <div class="row">
+          <div>
+            <label id="loginIdLabel">Admin ID</label>
+            <input id="loginId" placeholder="Enter ID (e.g., ADM-001)" />
+          </div>
+          <div>
+            <label>Password</label>
+            <input id="loginPass" type="password" placeholder="Enter Password" />
+          </div>
+          <button class="btn primary" id="loginBtn">Login</button>
+          <div class="hint">
+            ☁️ This ERP runs on Firebase Realtime Database. All data is securely stored in the cloud.
+          </div>
+        </div>
+        <div class="footerNote">
+          Version: <b>V5 Firebase Edition</b> | Developed for Business Investment System
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- APP (বাকি অংশ একই থাকবে) -->
+<div id="appPage" class="app" style="display:none;">
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div class="brand">
+          <div>
+            <h2>IMS ERP V5</h2>
+            <div class="small">Firebase Cloud Panel</div>
+          </div>
+          <div class="badge" id="systemMode">ADMIN</div>
+        </div>
+        <div class="userBox">
+          <div class="name" id="currentUserName">-</div>
+          <div class="role" id="currentUserRole">-</div>
+          <div class="mini">
+            <span class="chip" id="chipId">ID: -</span>
+            <span class="chip" id="chipStatus">Active</span>
+          </div>
+        </div>
+        <div class="navTitle">Navigation</div>
+        <div class="nav" id="sidebarNav"></div>
+        <button class="logoutBtn" id="logoutBtn">Logout</button>
+    </div>
+
+    <!-- MAIN -->
+    <div class="main">
+        <div class="topbar">
+          <div>
+            <h1 id="pageTitle">Dashboard</h1>
+            <p id="pageSubtitle">Welcome to IMS ERP V5 Ultra Advanced.</p>
+          </div>
+          <div class="rightTop">
+            <button class="btn" id="systemToolsBtn" style="display:none;">System Tools</button>
+            <button class="btn primary" id="quickAddBtn" style="display:none;">Quick Add</button>
+          </div>
+        </div>
+        <div id="pageContent"></div>
+    </div>
+</div>
+
+<!-- MODALS (কোনো পরিবর্তন নেই) -->
+<div class="modalWrap" id="modalQuickAdd">
+  <div class="modal">
+    <div class="modalHead">
+      <div>
+        <h2>Quick Add</h2>
+        <p>Quick actions: Add Member, Add Investment, Add Expense, Send Notice</p>
+      </div>
+      <button class="closeX">✕</button>
+    </div>
+    <div class="row row-2">
+      <button class="btn success" data-action="addMember">➕ Add Member</button>
+      <button class="btn success" data-action="addInvestment">➕ Add Investment</button>
+      <button class="btn warn" data-action="addExpense">➕ Add Expense</button>
+      <button class="btn primary" data-action="sendNotice">📢 Send Notice</button>
+    </div>
+  </div>
+</div>
+<!-- বাকি সব Modal গুলো অপরিবর্তিত থাকবে -->
+<!-- ... (আপনার বিদ্যমান সব modal কোড এখানে যুক্ত করুন) ... -->
+
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-database-compat.js"></script>
+
+<!-- আপনার স্ক্রিপ্ট ফাইল -->
+<script src="script.js"></script>
+
+</body>
+</html>

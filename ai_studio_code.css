@@ -1,0 +1,82 @@
+/* আপনার পুরোনো CSS কোড একই থাকবে */
+:root{
+  --bg:#0b1220;
+  --panel:#0f1a2d;
+  --panel2:#111f36;
+  --card:#0f223d;
+  --text:#e7f0ff;
+  --muted:#9db0d1;
+  --line:rgba(255,255,255,0.08);
+  --accent:#3b82f6;
+  --accent2:#22c55e;
+  --danger:#ef4444;
+  --warning:#f59e0b;
+  --info:#06b6d4;
+  --shadow:0 12px 30px rgba(0,0,0,.35);
+  --radius:16px;
+  --radius2:22px;
+  --font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+}
+/* ... আপনার বাকি সব CSS এখানে ... */
+
+/* Modern UI এবং অ্যানিমেশনের জন্য নতুন CSS */
+/* বাটন, কার্ড এবং মডাল এর জন্য ট্রানজিশন */
+.btn, .card, .panel, .modal, .nav button, .loginCard {
+  transition: all 0.3s ease-in-out;
+}
+
+/* Hover ইফেক্ট */
+.btn:hover, .nav button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+}
+.card:hover {
+  transform: scale(1.02);
+  border-color: var(--accent);
+}
+
+/* Modal ওপেন হওয়ার অ্যানিমেশন */
+.modalWrap {
+  animation: fadeIn 0.3s ease;
+}
+.modal {
+  animation: slideUp 0.4s ease-out;
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideUp {
+  from { transform: translateY(30px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* Loading Spinner */
+.loading {
+  display: none; /* Initially hidden */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  z-index: 99999;
+  justify-content: center;
+  align-items: center;
+}
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  border-top-color: var(--accent);
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* Show spinner when needed */
+.loading.show {
+  display: flex;
+}
