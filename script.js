@@ -1,66 +1,53 @@
+[file name]: script.js
+[file content begin]
+// Firebase configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyDWO_T0iL8K-CaF8haK0MYkdyOzpTR2CVo",
+  authDomain: "taqwa-7ddf2.firebaseapp.com",
+  projectId: "taqwa-7ddf2",
+  storageBucket: "taqwa-7ddf2.firebasestorage.app",
+  messagingSenderId: "1053737405036",
+  appId: "1:1053737405036:web:c9837bbd0ea0e9be612649",
+  measurementId: "G-6MZ4Z431MP",
+  databaseURL: "https://taqwa-7ddf2-default-rtdb.firebaseio.com/"
+};
+
+// Initialize Firebase
+const app = firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+const auth = firebase.auth();
+
 /* ============================================================
-   IMS ERP V5.1 FINAL - ULTRA ADVANCED (LOCALSTORAGE)
-   Complete bug-free version with all features
+   IMS ERP V6.0 - FIREBASE EDITION
    ============================================================ */
 
 /* -----------------------------
    DOM Elements & Event Listeners
 ------------------------------*/
 document.addEventListener('DOMContentLoaded', function() {
-  // Login elements
-  document.getElementById('tabAdmin').addEventListener('click', () => switchLoginTab('admin'));
-  document.getElementById('tabMember').addEventListener('click', () => switchLoginTab('member'));
-  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  // Check if user is already logged in
+  checkAuthState();
+
+  // Login elements - Fixed IDs to match HTML
+  document.getElementById('btnTabAdmin').addEventListener('click', () => switchLoginTab('admin'));
+  document.getElementById('btnTabMember').addEventListener('click', () => switchLoginTab('member'));
+  document.getElementById('btnLogin').addEventListener('click', doLogin);
 
   // Logout
-  document.getElementById('logoutBtn').addEventListener('click', logout);
+  document.getElementById('btnLogout').addEventListener('click', logout);
 
+  // Mobile menu
+  document.getElementById('mobileMenuBtn').addEventListener('click', toggleMobileMenu);
+
+  // Modal close buttons
+  document.getElementById('closeModal').addEventListener('click', () => closeModal('customModal'));
+  
   // System tools
-  document.getElementById('systemToolsBtn').addEventListener('click', () => openModal('modalSystemTools'));
-  document.getElementById('quickAddBtn').addEventListener('click', () => openModal('modalQuickAdd'));
-
-  // Quick add buttons
-  document.querySelectorAll('[data-action]').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const action = this.getAttribute('data-action');
-      closeModal('modalQuickAdd');
-      if (action === 'addMember') go('admin_members');
-      if (action === 'addInvestment') go('admin_investments');
-      if (action === 'addExpense') go('admin_expenses');
-      if (action === 'sendNotice') go('admin_notices');
-    });
-  });
-
-  // System tools buttons
-  document.getElementById('exportJSONBtn').addEventListener('click', exportJSON);
-  document.getElementById('importJSONBtn').addEventListener('click', importJSONPrompt);
-  document.getElementById('resetDemoBtn').addEventListener('click', resetDemo);
-  document.getElementById('wipeAllBtn').addEventListener('click', wipeAll);
-
-  // Deposit confirmation
-  document.getElementById('confirmDepositBtn').addEventListener('click', confirmDepositSubmit);
-
-  // Receipt buttons
-  document.getElementById('printReceiptBtn').addEventListener('click', printReceipt);
-  document.getElementById('downloadReceiptBtn').addEventListener('click', downloadReceipt);
-
-  // Close modal buttons
-  document.querySelectorAll('.closeX').forEach(btn => {
-    btn.addEventListener('click', function() {
-      const modal = this.closest('.modalWrap');
-      if (modal) {
-        closeModal(modal.id);
-      }
-    });
-  });
-
-  // Modal close on background click
-  document.querySelectorAll('.modalWrap').forEach(modal => {
-    modal.addEventListener('click', function(e) {
-      if (e.target === this) {
-        closeModal(this.id);
-      }
-    });
+  document.querySelectorAll('[onclick^="closeModal"]').forEach(btn => {
+    const match = btn.getAttribute('onclick').match(/closeModal\('([^']+)'\)/);
+    if (match) {
+      btn.addEventListener('click', () => closeModal(match[1]));
+    }
   });
 
   // Initialize
@@ -68,38 +55,187 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 /* -----------------------------
+   Global Session
+------------------------------*/
+let SESSION = {
+  mode: "admin",
+  user: null,
+  page: null,
+  db: null
+};
+
+/* -----------------------------
+   Firebase Database Functions
+------------------------------*/
+const db = {
+  ref: (path) => database.ref(path),
+  set: (path, data) => database.ref(path).set(data),
+  get: (path) => database.ref(path).once('value'),
+  update: (path, data) => database.ref(path).update(data),
+  remove: (path) => database.ref(path).remove(),
+  push: (path, data) => database.ref(path).push(data),
+  onValue: (path, callback) => database.ref(path).on('value', callback)
+};
+
+async function getDB() {
+  try {
+    const snapshot = await db.get('/');
+    if (snapshot.exists()) {
+      return snapshot.val();
+    }
+    return null;
+  } catch (error) {
+    console.error('Error getting database:', error);
+    return null;
+  }
+}
+
+async function saveDB(data) {
+  try {
+    await db.set('/', data);
+    return true;
+  } catch (error) {
+    console.error('Error saving database:', error);
+    return false;
+  }
+}
+
+async function updateDB(path, data) {
+  try {
+    await db.update(path, data);
+    return true;
+  } catch (error) {
+    console.error('Error updating database:', error);
+    return false;
+  }
+}
+
+async function seedDB() {
+  const currentYear = new Date().getFullYear();
+  const initialData = {
+    meta: {
+      version: "V6.0 Firebase Edition",
+      createdAt: nowISO(),
+      monthlyShareAmount: 10000,
+      companyName: "IMS Investment Ltd.",
+      companyAddress: "Dhaka, Bangladesh",
+      companyPhone: "+8801234567890",
+      companyEmail: "info@imsinvestment.com",
+      whatsappNumber: "+8801234567890"
+    },
+    admins: {
+      "ADM-001": {
+        id: "ADM-001",
+        name: "Super Admin",
+        role: "SUPER_ADMIN",
+        email: "admin@ims.com",
+        pass: "admin123",
+        active: true,
+        createdAt: nowISO()
+      }
+    },
+    members: {
+      "FM-001": {
+        id: "FM-001",
+        name: "Demo Founder Member",
+        memberType: "FOUNDER",
+        fatherName: "Father Name",
+        motherName: "Mother Name",
+        dob: "1990-01-01",
+        phone: "+8801712345678",
+        email: "demo@gmail.com",
+        pass: "1234",
+        shares: 1,
+        status: "ACTIVE",
+        joinDate: `${currentYear}-01-01`,
+        address: "Dhaka, Bangladesh",
+        photo: "",
+        nidNo: "1234567890",
+        nidFront: "",
+        nidBack: "",
+        nomineeName: "Nominee Demo",
+        nomineeRelation: "Father",
+        nomineeNid: "9876543210",
+        nomineePhone: "+8801812345678",
+        nomineePhoto: "",
+        createdAt: nowISO(),
+        updatedAt: nowISO(),
+        approved: true
+      }
+    },
+    deposits: {},
+    investments: {},
+    expenses: {},
+    sales: {},
+    profitDistributions: {},
+    notices: {},
+    resignations: {},
+    activityLogs: {}
+  };
+
+  await saveDB(initialData);
+  return initialData;
+}
+
+async function ensureDB() {
+  let data = await getDB();
+  if (!data) {
+    data = await seedDB();
+  }
+  return data;
+}
+
+/* -----------------------------
+   Firebase Authentication
+------------------------------*/
+async function checkAuthState() {
+  auth.onAuthStateChanged(async (user) => {
+    if (user) {
+      console.log("User is logged in:", user);
+      // For demo, we'll use the local login system
+    } else {
+      console.log("No user logged in");
+    }
+  });
+}
+
+async function getUserData(email, password) {
+  try {
+    // Check in admins
+    const snapshot = await db.get('/admins');
+    if (snapshot.exists()) {
+      const admins = snapshot.val();
+      const admin = Object.values(admins).find(a => a.email === email && a.pass === password && a.active);
+      if (admin) {
+        return { type: "ADMIN", ...admin };
+      }
+    }
+
+    // Check in members
+    const membersSnapshot = await db.get('/members');
+    if (membersSnapshot.exists()) {
+      const members = membersSnapshot.val();
+      const member = Object.values(members).find(m => 
+        m.email === email && 
+        m.pass === password && 
+        m.approved && 
+        m.status === "ACTIVE"
+      );
+      if (member) {
+        return { type: "MEMBER", ...member };
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('Error getting user data:', error);
+    return null;
+  }
+}
+
+/* -----------------------------
    Utilities
 ------------------------------*/
-const LS_KEY = "IMS_ERP_V5_DB";
-
-// Bangladeshi districts
-const BANGLADESH_DISTRICTS = [
-  "Dhaka", "Chattogram", "Khulna", "Rajshahi", "Barishal", "Sylhet", "Rangpur",
-  "Mymensingh", "Comilla", "Narayanganj", "Gazipur", "Cox's Bazar", "Brahmanbaria",
-  "Noakhali", "Feni", "Lakshmipur", "Chandpur", "Faridpur", "Gopalganj", "Madaripur",
-  "Shariatpur", "Tangail", "Kishoreganj", "Manikganj", "Munshiganj", "Narsingdi",
-  "Netrokona", "Sherpur", "Jamalpur", "Bogra", "Joypurhat", "Naogaon", "Natore",
-  "Chapainawabganj", "Pabna", "Sirajganj", "Jessore", "Jhenaidah", "Magura",
-  "Meherpur", "Narail", "Satkhira", "Bagerhat", "Chuadanga", "Kushtia", "Barguna",
-  "Bhola", "Jhalokati", "Patuakhali", "Pirojpur", "Bandarban", "Khagrachhari",
-  "Rangamati"
-];
-
-// Bangladeshi banks
-const BANGLADESH_BANKS = [
-  "Sonali Bank", "Janata Bank", "Agrani Bank", "Rupali Bank", "Bangladesh Development Bank",
-  "Bangladesh Krishi Bank", "Rajshahi Krishi Unnayan Bank", "Probashi Kallyan Bank",
-  "Islami Bank Bangladesh", "Al-Arafah Islami Bank", "Social Islami Bank",
-  "EXIM Bank", "First Security Islami Bank", "ICB Islamic Bank",
-  "Shahjalal Islami Bank", "Union Bank", "Standard Bank", "Premier Bank",
-  "Bank Asia", "BRAC Bank", "Dhaka Bank", "Dutch-Bangla Bank", "Eastern Bank",
-  "IFIC Bank", "Jamuna Bank", "Meghna Bank", "Mercantile Bank", "Midland Bank",
-  "Modhumoti Bank", "Mutual Trust Bank", "National Bank", "NRB Bank",
-  "NRB Commercial Bank", "One Bank", "Prime Bank", "Pubali Bank",
-  "South Bangla Agriculture & Commerce Bank", "Southeast Bank", "Trust Bank",
-  "United Commercial Bank", "Uttara Bank"
-];
-
 function nowISO() {
   return new Date().toISOString();
 }
@@ -115,101 +251,63 @@ function monthKey(date = new Date()) {
   return `${y}-${m}`;
 }
 
-function yearKey(date = new Date()) {
-  return date.getFullYear().toString();
-}
-
-// Generate auto IDs
 function genId(prefix) {
-  const db = ensureDB();
   const year = new Date().getFullYear();
-  let maxNum = 0;
-
-  if (prefix === "DP") {
-    db.deposits.forEach(d => {
-      if (d.id && d.id.startsWith(`DP-${year}`)) {
-        const parts = d.id.split('-');
-        if (parts.length >= 3) {
-          const num = parseInt(parts[2]) || 0;
-          if (num > maxNum) maxNum = num;
-        }
-      }
-    });
-  } else if (prefix === "MR") {
-    db.deposits.forEach(d => {
-      if (d.mrId && d.mrId.startsWith(`MR-${year}`)) {
-        const parts = d.mrId.split('-');
-        if (parts.length >= 3) {
-          const num = parseInt(parts[2]) || 0;
-          if (num > maxNum) maxNum = num;
-        }
-      }
-    });
-  } else if (prefix === "INV") {
-    db.investments.forEach(d => {
-      if (d.id && d.id.startsWith(`INV-${year}`)) {
-        const parts = d.id.split('-');
-        if (parts.length >= 3) {
-          const num = parseInt(parts[2]) || 0;
-          if (num > maxNum) maxNum = num;
-        }
-      }
-    });
-  } else if (prefix === "VCH") {
-    db.expenses.forEach(d => {
-      if (d.voucherId && d.voucherId.startsWith(`VCH-${year}`)) {
-        const parts = d.voucherId.split('-');
-        if (parts.length >= 3) {
-          const num = parseInt(parts[2]) || 0;
-          if (num > maxNum) maxNum = num;
-        }
-      }
-    });
-  } else if (prefix === "FM") {
-    db.members.forEach(m => {
-      if (m.id && m.id.startsWith("FM-")) {
-        const num = parseInt(m.id.split('-')[1]) || 0;
-        if (num > maxNum) maxNum = num;
-      }
-    });
-  } else if (prefix === "RM") {
-    db.members.forEach(m => {
-      if (m.id && m.id.startsWith("RM-")) {
-        const num = parseInt(m.id.split('-')[1]) || 0;
-        if (num > maxNum) maxNum = num;
-      }
-    });
-  }
-
-  const nextNum = String(maxNum + 1).padStart(6, "0");
-  if (prefix === "FM" || prefix === "RM") {
-    return `${prefix}-${String(maxNum + 1).padStart(3, "0")}`;
-  }
-  return `${prefix}-${year}-${nextNum}`;
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  return `${prefix}-${year}-${timestamp}-${random}`;
 }
 
-function toast(title, msg) {
-  const wrap = document.getElementById("toastWrap");
-  const div = document.createElement("div");
-  div.className = "toast";
-  div.innerHTML = `
-    <div class="t1">${title}</div>
-    <div class="t2">${msg}</div>
-    <div class="t3">${new Date().toLocaleString()}</div>
+function showToast(message, type = 'info') {
+  const toastBox = document.getElementById('toastBox');
+  const toast = document.createElement('div');
+  toast.className = `toast toast-${type}`;
+  
+  const icons = {
+    success: '✓',
+    error: '✗',
+    warning: '⚠',
+    info: 'ℹ'
+  };
+  
+  toast.innerHTML = `
+    <i class="fas fa-${type === 'success' ? 'check-circle' : 
+                      type === 'error' ? 'exclamation-circle' : 
+                      type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+    <span>${message}</span>
   `;
-  wrap.appendChild(div);
-  setTimeout(() => div.remove(), 3500);
-
-  // Play notification sound
-  playNotificationSound();
+  
+  toastBox.appendChild(toast);
+  
+  // Show toast
+  setTimeout(() => toast.classList.add('show'), 10);
+  
+  // Auto remove after 5 seconds
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 300);
+  }, 5000);
 }
 
 function openModal(id) {
-  document.getElementById(id).style.display = "flex";
+  const modal = document.getElementById(id);
+  if (modal) {
+    modal.style.display = "flex";
+    setTimeout(() => modal.classList.add('show'), 10);
+  }
 }
 
 function closeModal(id) {
-  document.getElementById(id).style.display = "none";
+  const modal = document.getElementById(id);
+  if (modal) {
+    modal.classList.remove('show');
+    setTimeout(() => modal.style.display = "none", 300);
+  }
+}
+
+function toggleMobileMenu() {
+  const sidebar = document.getElementById('sidebar');
+  sidebar.classList.toggle('show');
 }
 
 function fileToBase64(file) {
@@ -225,288 +323,139 @@ function fileToBase64(file) {
   });
 }
 
-function playNotificationSound() {
-  try {
-    const audio = new Audio('data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA==');
-    audio.volume = 0.3;
-    audio.play().catch(() => { });
-  } catch (e) { }
-}
-
-// Send WhatsApp notification (simulated)
-function sendWhatsAppNotification(phone, message) {
-  console.log("WhatsApp Notification to", phone, ":", message);
-  // In real implementation, use WhatsApp API
-}
-
-// Send Email notification (simulated)
-function sendEmailNotification(email, subject, message) {
-  console.log("Email to", email, ":", subject, "-", message);
-  // In real implementation, use Email API
-}
-
-/* -----------------------------
-   Database Init
-------------------------------*/
-//function getDB() {
-//  const raw = localStorage.getItem(LS_KEY);
-//  if (!raw) return null;
-//  try {
-//    return JSON.parse(raw);
-//  } catch (e) {
-//    return null;
-//  }
-///}
-
-
-<script type="module">
-  // Import the functions you need from the SDKs you need
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
-  import { getAnalytics } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-analytics.js";
-  // TODO: Add SDKs for Firebase products that you want to use
-  // https://firebase.google.com/docs/web/setup#available-libraries
-
-  // Your web app's Firebase configuration
-  // For Firebase JS SDK v7.20.0 and later, measurementId is optional
-  const firebaseConfig = {
-    apiKey: "AIzaSyChoKGQzwMlLTw3d__sk3amo6Nh8RMGCX4",
-    authDomain: "taqwa-property-bd.firebaseapp.com",
-    databaseURL: "https://taqwa-property-bd-default-rtdb.asia-southeast1.firebasedatabase.app",
-    projectId: "taqwa-property-bd",
-    storageBucket: "taqwa-property-bd.firebasestorage.app",
-    messagingSenderId: "266724049111",
-    appId: "1:266724049111:web:c4861c1f654539d1bdb092",
-    measurementId: "G-90D8VDC6X2"
-  };
-
-  // Initialize Firebase
-  const app = initializeApp(firebaseConfig);
-  const analytics = getAnalytics(app);
-</script>
-
-
-
-
-function saveDB(db) {
-  localStorage.setItem(LS_KEY, JSON.stringify(db));
-}
-
-function seedDB() {
-  const currentYear = new Date().getFullYear();
-  const db = {
-    meta: {
-      version: "V5.1 Ultra Advanced",
-      createdAt: nowISO(),
-      monthlyShareAmount: 10000,
-      companyName: "IMS Investment Ltd.",
-      companyAddress: "Dhaka, Bangladesh",
-      companyPhone: "+8801234567890",
-      companyEmail: "info@imsinvestment.com",
-      whatsappNumber: "+8801234567890"
-    },
-    admins: [
-      { id: "ADM-001", name: "Super Admin", role: "SUPER_ADMIN", pass: "admin123", active: true, createdAt: nowISO() },
-      { id: "ADM-002", name: "Finance Admin", role: "FINANCE_ADMIN", pass: "finance123", active: true, createdAt: nowISO() },
-      { id: "ADM-003", name: "Accounts Admin", role: "ACCOUNTS_ADMIN", pass: "accounts123", active: true, createdAt: nowISO() },
-    ],
-    members: [
-      {
-        id: "FM-001",
-        name: "Demo Founder Member",
-        memberType: "FOUNDER",
-        fatherName: "Father Name",
-        motherName: "Mother Name",
-        dob: "1990-01-01",
-        phone: "+8801712345678",
-        email: "demo@gmail.com",
-        pass: "1234",
-        shares: 1,
-        status: "ACTIVE",
-        joinDate: "2025-01-01",
-        address: "Dhaka, Bangladesh",
-        photo: "",
-        nidNo: "1234567890",
-        nidFront: "",
-        nidBack: "",
-        nomineeName: "Nominee Demo",
-        nomineeRelation: "Father",
-        nomineeNid: "9876543210",
-        nomineePhone: "+8801812345678",
-        nomineePhoto: "",
-        createdAt: nowISO(),
-        updatedAt: nowISO(),
-        approved: true
-      }
-    ],
-    deposits: [],
-    investments: [],
-    expenses: [],
-    sales: [],
-    profitDistributions: [],
-    notices: [],
-    resignations: [],
-    activityLogs: []
-  };
-  saveDB(db);
-  return db;
-}
-
-function ensureDB() {
-  let db = getDB();
-  if (!db) db = seedDB();
-  return db;
-}
-
-/* -----------------------------
-   Global Session
-------------------------------*/
-let SESSION = {
-  mode: "admin",
-  user: null,
-  page: null
-};
-
-function logActivity(action, details) {
-  const db = ensureDB();
-  if (!db.activityLogs) db.activityLogs = [];
-  db.activityLogs.unshift({
-    id: "LOG-" + Date.now(),
-    action,
-    details,
-    byId: SESSION.user?.id || "SYSTEM",
-    byRole: SESSION.user?.role || "SYSTEM",
-    at: nowISO()
-  });
-  saveDB(db);
-}
-
 /* -----------------------------
    Login System
 ------------------------------*/
 function switchLoginTab(mode) {
   SESSION.mode = mode;
-  document.getElementById("tabAdmin").classList.toggle("active", mode === "admin");
-  document.getElementById("tabMember").classList.toggle("active", mode === "member");
-  document.getElementById("loginIdLabel").innerText = mode === "admin" ? "Admin ID" : "Member ID";
+  const btnAdmin = document.getElementById('btnTabAdmin');
+  const btnMember = document.getElementById('btnTabMember');
+  
+  btnAdmin.classList.toggle('active', mode === 'admin');
+  btnMember.classList.toggle('active', mode === 'member');
+  
+  const loginId = document.getElementById('loginId');
+  loginId.placeholder = mode === 'admin' ? 'Enter admin email' : 'Enter member email';
 }
 
-function doLogin() {
-  const id = document.getElementById("loginId").value.trim();
-  const pass = document.getElementById("loginPass").value.trim();
-  const db = ensureDB();
+async function doLogin() {
+  const email = document.getElementById('loginId').value.trim();
+  const password = document.getElementById('loginPass').value.trim();
 
-  if (!id || !pass) {
-    toast("Login Failed", "Please enter ID and Password.");
+  if (!email || !password) {
+    showToast('Please enter email and password', 'error');
     return;
   }
 
-  if (SESSION.mode === "admin") {
-    const admin = db.admins.find(a => a.id === id && a.pass === pass && a.active);
-    if (!admin) {
-      toast("Login Failed", "Invalid Admin ID or Password.");
-      return;
+  // Show loading
+  const loader = document.getElementById('loader');
+  loader.style.display = 'flex';
+
+  try {
+    const userData = await getUserData(email, password);
+    
+    if (userData) {
+      SESSION.user = userData;
+      SESSION.db = await ensureDB();
+      
+      showToast(`Welcome ${userData.name}`, 'success');
+      startApp();
+    } else {
+      showToast('Invalid credentials or account not approved', 'error');
     }
-    SESSION.user = { type: "ADMIN", id: admin.id, name: admin.name, role: admin.role };
-    logActivity("ADMIN_LOGIN", `Admin logged in: ${admin.id}`);
-    startApp();
-  } else {
-    const member = db.members.find(m => m.id === id && m.pass === pass && m.approved && m.status === "ACTIVE");
-    if (!member) {
-      toast("Login Failed", "Invalid Member ID or Password.");
-      return;
-    }
-    SESSION.user = { type: "MEMBER", id: member.id, name: member.name, role: "MEMBER" };
-    logActivity("MEMBER_LOGIN", `Member logged in: ${member.id}`);
-    startApp();
+  } catch (error) {
+    console.error('Login error:', error);
+    showToast('Login failed. Please try again.', 'error');
+  } finally {
+    loader.style.display = 'none';
   }
 }
 
 function logout() {
-  logActivity("LOGOUT", `User logged out`);
   SESSION.user = null;
   SESSION.page = null;
-  document.getElementById("appPage").style.display = "none";
-  document.getElementById("loginPage").style.display = "flex";
-  toast("Logout", "You have been logged out.");
+  SESSION.db = null;
+  
+  // Hide app section, show login
+  document.getElementById('appSection').style.display = 'none';
+  document.getElementById('loginSection').style.display = 'flex';
+  
+  // Reset form
+  document.getElementById('loginId').value = '';
+  document.getElementById('loginPass').value = '';
+  
+  showToast('Logged out successfully', 'success');
 }
 
 /* -----------------------------
    App Start
 ------------------------------*/
-function startApp() {
-  document.getElementById("loginPage").style.display = "none";
-  document.getElementById("appPage").style.display = "grid";
-
-  document.getElementById("currentUserName").innerText = SESSION.user.name;
-  document.getElementById("currentUserRole").innerText = SESSION.user.role;
-  document.getElementById("chipId").innerText = "ID: " + SESSION.user.id;
-  document.getElementById("systemMode").innerText = SESSION.user.type;
-
-  // Show/hide system tools based on user type
-  if (SESSION.user.type === "ADMIN") {
-    document.getElementById("systemToolsBtn").style.display = "inline-block";
-    document.getElementById("quickAddBtn").style.display = "inline-block";
-  } else {
-    document.getElementById("systemToolsBtn").style.display = "none";
-    document.getElementById("quickAddBtn").style.display = "none";
+async function startApp() {
+  // Hide login, show app
+  document.getElementById('loginSection').style.display = 'none';
+  document.getElementById('appSection').style.display = 'grid';
+  
+  // Load database if not loaded
+  if (!SESSION.db) {
+    SESSION.db = await ensureDB();
   }
-
-  buildSidebar();
-  go(SESSION.user.type === "ADMIN" ? "admin_dashboard" : "member_dashboard");
+  
+  // Update user info in sidebar
+  document.getElementById('displayUserName').textContent = SESSION.user.name;
+  document.getElementById('displayUserRole').textContent = SESSION.user.role || SESSION.user.type;
+  document.getElementById('chipId').textContent = SESSION.user.id;
+  document.getElementById('systemMode').textContent = SESSION.user.type;
+  
+  // Show/hide admin tools
+  const fabContainer = document.getElementById('fabContainer');
+  if (SESSION.user.type === 'ADMIN') {
+    fabContainer.style.display = 'block';
+    // Build admin sidebar
+    buildSidebar([
+      { id: 'admin_dashboard', name: 'Dashboard', icon: 'fas fa-chart-line' },
+      { id: 'admin_members', name: 'Members', icon: 'fas fa-users' },
+      { id: 'admin_deposits', name: 'Deposits', icon: 'fas fa-money-bill-wave' },
+      { id: 'admin_investments', name: 'Investments', icon: 'fas fa-chart-bar' },
+      { id: 'admin_expenses', name: 'Expenses', icon: 'fas fa-receipt' },
+      { id: 'admin_notices', name: 'Notices', icon: 'fas fa-bullhorn' },
+      { id: 'admin_reports', name: 'Reports', icon: 'fas fa-file-alt' },
+      { id: 'company_info', name: 'Company Info', icon: 'fas fa-info-circle' }
+    ]);
+  } else {
+    fabContainer.style.display = 'none';
+    // Build member sidebar
+    buildSidebar([
+      { id: 'member_dashboard', name: 'Dashboard', icon: 'fas fa-chart-line' },
+      { id: 'member_profile', name: 'My Profile', icon: 'fas fa-user' },
+      { id: 'member_deposit', name: 'Submit Deposit', icon: 'fas fa-money-bill-wave' },
+      { id: 'member_deposit_history', name: 'Deposit History', icon: 'fas fa-history' },
+      { id: 'member_notices', name: 'Notices', icon: 'fas fa-bullhorn' },
+      { id: 'company_info', name: 'Company Info', icon: 'fas fa-info-circle' }
+    ]);
+  }
+  
+  // Go to dashboard
+  go(SESSION.user.type === 'ADMIN' ? 'admin_dashboard' : 'member_dashboard');
 }
 
-/* -----------------------------
-   Sidebar
-------------------------------*/
-function buildSidebar() {
-  const nav = document.getElementById("sidebarNav");
-  nav.innerHTML = "";
-
-  const db = ensureDB();
-  const pendingDeposits = db.deposits ? db.deposits.filter(d => d.status === "PENDING").length : 0;
-
-  let items = [];
-  if (SESSION.user.type === "ADMIN") {
-    items = [
-      { id: "admin_dashboard", name: "Dashboard" },
-      { id: "admin_members", name: "Members" },
-      { id: "admin_deposits", name: "Deposits", count: pendingDeposits },
-      { id: "admin_investments", name: "Investments" },
-      { id: "admin_expenses", name: "Expenses" },
-      { id: "admin_sales", name: "Sales" },
-      { id: "admin_profit", name: "Profit Distribution" },
-      { id: "admin_resign", name: "Resignation & Settlement" },
-      { id: "admin_notices", name: "Notices" },
-      { id: "admin_reports", name: "Reports" },
-      { id: "admin_admins", name: "Admin Accounts" },
-      { id: "admin_logs", name: "Activity Logs" },
-    ];
-  } else {
-    items = [
-      { id: "member_dashboard", name: "Dashboard" },
-      { id: "member_profile", name: "My Profile" },
-      { id: "member_deposit", name: "Submit Deposit" },
-      { id: "member_deposit_history", name: "Deposit History" },
-      { id: "member_investments", name: "Investments" },
-      { id: "member_profit", name: "Profit & Shares" },
-      { id: "member_notices", name: "Notices" },
-      { id: "company_info", name: "Vision & Mission" },
-    ];
-  }
-
-  items.forEach(it => {
-    const btn = document.createElement("button");
-    btn.className = (SESSION.page === it.id ? "active" : "");
-    if (it.id === "company_info") {
-      btn.addEventListener('click', () => openModal("modalCompanyInfo"));
-    } else {
-      btn.addEventListener('click', () => go(it.id));
-    }
-    btn.innerHTML = `
-      <span>${it.name}</span>
-      ${it.count ? `<span class="count">${it.count}</span>` : `<span class="count">›</span>`}
+function buildSidebar(items) {
+  const navMenu = document.getElementById('navMenu');
+  navMenu.innerHTML = '';
+  
+  items.forEach(item => {
+    const button = document.createElement('button');
+    button.innerHTML = `
+      <i class="${item.icon}"></i>
+      <span>${item.name}</span>
     `;
-    nav.appendChild(btn);
+    
+    if (item.id === 'company_info') {
+      button.addEventListener('click', () => openModal('modalCompanyInfo'));
+    } else {
+      button.addEventListener('click', () => go(item.id));
+    }
+    
+    navMenu.appendChild(button);
   });
 }
 
@@ -515,4283 +464,1212 @@ function buildSidebar() {
 ------------------------------*/
 function go(page) {
   SESSION.page = page;
-  buildSidebar();
-
-  const pageMap = {
-    "admin_dashboard": renderAdminDashboard,
-    "admin_members": renderAdminMembers,
-    "admin_deposits": renderAdminDeposits,
-    "admin_investments": renderAdminInvestments,
-    "admin_expenses": renderAdminExpenses,
-    "admin_sales": renderAdminSales,
-    "admin_profit": renderAdminProfit,
-    "admin_resign": renderAdminResign,
-    "admin_notices": renderAdminNotices,
-    "admin_reports": renderAdminReports,
-    "admin_admins": renderAdminAdmins,
-    "admin_logs": renderAdminLogs,
-    "member_dashboard": renderMemberDashboard,
-    "member_profile": renderMemberProfile,
-    "member_deposit": renderMemberDeposit,
-    "member_deposit_history": renderMemberDepositHistory,
-    "member_investments": renderMemberInvestments,
-    "member_profit": renderMemberProfit,
-    "member_notices": renderMemberNotices
+  
+  // Update active state in sidebar
+  document.querySelectorAll('#navMenu button').forEach(btn => {
+    btn.classList.remove('active');
+  });
+  
+  // Update page title
+  const titles = {
+    'admin_dashboard': 'Admin Dashboard',
+    'admin_members': 'Member Management',
+    'admin_deposits': 'Deposit Management',
+    'admin_investments': 'Investment Management',
+    'admin_expenses': 'Expense Management',
+    'admin_notices': 'Notice Management',
+    'admin_reports': 'Reports',
+    'member_dashboard': 'Member Dashboard',
+    'member_profile': 'My Profile',
+    'member_deposit': 'Submit Deposit',
+    'member_deposit_history': 'Deposit History',
+    'member_notices': 'Notices'
   };
-
-  if (pageMap[page]) pageMap[page]();
+  
+  document.getElementById('pageTitle').textContent = titles[page] || 'Dashboard';
+  document.getElementById('pageSubtitle').textContent = 'Real-time data from Firebase';
+  
+  // Load page content
+  const pageMap = {
+    'admin_dashboard': renderAdminDashboard,
+    'admin_members': renderAdminMembers,
+    'member_dashboard': renderMemberDashboard,
+    'member_profile': renderMemberProfile,
+    'member_deposit': renderMemberDeposit,
+    'member_notices': renderMemberNotices,
+    'company_info': () => openModal('modalCompanyInfo')
+  };
+  
+  if (pageMap[page]) {
+    pageMap[page]();
+  } else {
+    renderComingSoon();
+  }
 }
 
-/* -----------------------------
-   Header Helper
-------------------------------*/
-function setPage(title, subtitle) {
-  document.getElementById("pageTitle").innerText = title;
-  document.getElementById("pageSubtitle").innerText = subtitle;
+function renderComingSoon() {
+  const mainContent = document.getElementById('mainContent');
+  mainContent.innerHTML = `
+    <div style="text-align: center; padding: 50px;">
+      <div style="font-size: 72px; margin-bottom: 20px;">🚧</div>
+      <h2>Coming Soon</h2>
+      <p>This feature is under development</p>
+      <button class="btn-primary" onclick="go('${SESSION.user.type === 'ADMIN' ? 'admin_dashboard' : 'member_dashboard'}')" 
+              style="margin-top: 20px; width: auto; padding: 10px 30px;">
+        Back to Dashboard
+      </button>
+    </div>
+  `;
 }
 
 /* -----------------------------
    Admin Dashboard
 ------------------------------*/
-function renderAdminDashboard() {
-  const db = ensureDB();
-  setPage("Admin Dashboard", "Overview of Members, Deposits, Investments, Expenses, Profit.");
-
-  const totalMembers = db.members ? db.members.filter(m => m.approved).length : 0;
-  const activeMembers = db.members ? db.members.filter(m => m.status === "ACTIVE" && m.approved).length : 0;
-  const resignedMembers = db.members ? db.members.filter(m => m.status === "RESIGNED").length : 0;
-
-  const totalDeposit = db.deposits ? db.deposits.filter(d => d.status === "APPROVED").reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const totalExpense = db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const totalSales = db.sales ? db.sales.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const totalInvestments = db.investments ? db.investments.length : 0;
-
-  const pending = db.deposits ? db.deposits.filter(d => d.status === "PENDING").length : 0;
-  const netProfitAll = totalSales - totalExpense;
-
-  // Calculate balance (Deposits - Expenses)
-  const totalBalance = totalDeposit - totalExpense;
-
-  const html = `
-    <div class="gridCards">
-      <div class="card">
-        <div class="tag">Members</div>
-        <div class="title">Total Members</div>
-        <div class="value">${totalMembers}</div>
-        <div class="sub">Active: ${activeMembers} | Resigned: ${resignedMembers}</div>
+async function renderAdminDashboard() {
+  const mainContent = document.getElementById('mainContent');
+  mainContent.innerHTML = `
+    <div class="dashboard-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin-bottom: 30px;">
+      <div class="glass" style="padding: 20px; border-radius: 15px;">
+        <h3 style="color: #4cc9f0; margin-bottom: 10px;">Total Members</h3>
+        <h1 id="totalMembers">0</h1>
+        <p>Active members in system</p>
       </div>
-
-      <div class="card">
-        <div class="tag">Deposits</div>
-        <div class="title">Total Approved Deposit</div>
-        <div class="value">${fmtMoney(totalDeposit)}</div>
-        <div class="sub">Total company funds</div>
+      
+      <div class="glass" style="padding: 20px; border-radius: 15px;">
+        <h3 style="color: #10b981; margin-bottom: 10px;">Total Deposits</h3>
+        <h1 id="totalDeposits">৳ 0</h1>
+        <p>Approved deposits</p>
       </div>
-
-      <div class="card">
-        <div class="tag">Expense</div>
-        <div class="title">Total Expenses</div>
-        <div class="value">${fmtMoney(totalExpense)}</div>
-        <div class="sub">All time expenses</div>
+      
+      <div class="glass" style="padding: 20px; border-radius: 15px;">
+        <h3 style="color: #f59e0b; margin-bottom: 10px;">Pending Deposits</h3>
+        <h1 id="pendingDeposits">0</h1>
+        <p>Waiting for approval</p>
       </div>
-
-      <div class="card">
-        <div class="tag">Balance</div>
-        <div class="title">Current Balance</div>
-        <div class="value">${fmtMoney(totalBalance)}</div>
-        <div class="sub">Deposits - Expenses</div>
+      
+      <div class="glass" style="padding: 20px; border-radius: 15px;">
+        <h3 style="color: #ef4444; margin-bottom: 10px;">Total Expenses</h3>
+        <h1 id="totalExpenses">৳ 0</h1>
+        <p>All expenses</p>
       </div>
     </div>
-
-    <div class="twoCols">
-      <div class="panel">
-        <div class="panelHeader">
-          <div>
-            <h3>Quick Summary</h3>
-            <p>System financial summary and performance.</p>
-          </div>
-        </div>
-
-        <table>
-          <tr><th>Item</th><th>Value</th></tr>
-          <tr><td>Total Investments</td><td>${totalInvestments}</td></tr>
-          <tr><td>Total Sales</td><td>${fmtMoney(totalSales)}</td></tr>
-          <tr><td>Net Profit (All)</td><td>${fmtMoney(netProfitAll)}</td></tr>
-          <tr><td>Pending Deposits</td><td>${pending}</td></tr>
-          <tr><td>Monthly Share Amount</td><td>${fmtMoney(db.meta.monthlyShareAmount)}</td></tr>
-        </table>
+    
+    <div class="glass" style="padding: 20px; border-radius: 15px; margin-bottom: 20px;">
+      <h3 style="margin-bottom: 15px;">Recent Activity</h3>
+      <div id="recentActivity">
+        <p>Loading activity...</p>
       </div>
-
-      <div class="panel">
-        <div class="panelHeader">
-          <div>
-            <h3>Latest Pending Deposits</h3>
-            <p>Recent deposits waiting for approval.</p>
-          </div>
-          <div class="panelTools">
-            <button class="btn primary" onclick="go('admin_deposits')">Manage</button>
-          </div>
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Deposit ID</th>
-              <th>Member</th>
-              <th>Month</th>
-              <th>Amount</th>
-              <th>Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${db.deposits && db.deposits.filter(d => d.status === "PENDING").slice(0, 5).map(d => {
-    const m = db.members ? db.members.find(x => x.id === d.memberId) : null;
-    return `
-                <tr>
-                  <td>${d.id}</td>
-                  <td>${m ? m.name : "Unknown"}<div class="small">${d.memberId}</div></td>
-                  <td>${d.month}</td>
-                  <td>${fmtMoney(d.amount)}</td>
-                  <td><span class="status st-pending">PENDING</span></td>
-                </tr>
-              `;
-  }).join("") || `<tr><td colspan="5" class="small">No pending deposits.</td></tr>`}
-          </tbody>
-        </table>
+    </div>
+    
+    <div class="glass" style="padding: 20px; border-radius: 15px;">
+      <h3 style="margin-bottom: 15px;">Quick Actions</h3>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+        <button class="btn-primary" onclick="go('admin_members')" style="padding: 12px;">
+          <i class="fas fa-user-plus"></i> Add Member
+        </button>
+        <button class="btn-primary" onclick="openModal('modalQuickAdd')" style="padding: 12px;">
+          <i class="fas fa-plus"></i> Quick Add
+        </button>
+        <button class="btn-primary" onclick="go('admin_deposits')" style="padding: 12px;">
+          <i class="fas fa-check-circle"></i> Approve Deposits
+        </button>
+        <button class="btn-primary" onclick="openModal('modalSystemTools')" style="padding: 12px;">
+          <i class="fas fa-tools"></i> System Tools
+        </button>
       </div>
     </div>
   `;
+  
+  // Load real data
+  loadAdminDashboardData();
+}
 
-  document.getElementById("pageContent").innerHTML = html;
+async function loadAdminDashboardData() {
+  try {
+    const dbData = await getDB();
+    if (!dbData) return;
+    
+    // Total members
+    const members = dbData.members ? Object.values(dbData.members) : [];
+    const totalMembers = members.filter(m => m.approved).length;
+    document.getElementById('totalMembers').textContent = totalMembers;
+    
+    // Total deposits
+    const deposits = dbData.deposits ? Object.values(dbData.deposits) : [];
+    const totalDeposits = deposits.filter(d => d.status === 'APPROVED')
+      .reduce((sum, d) => sum + Number(d.amount || 0), 0);
+    document.getElementById('totalDeposits').textContent = fmtMoney(totalDeposits);
+    
+    // Pending deposits
+    const pendingDeposits = deposits.filter(d => d.status === 'PENDING').length;
+    document.getElementById('pendingDeposits').textContent = pendingDeposits;
+    
+    // Total expenses
+    const expenses = dbData.expenses ? Object.values(dbData.expenses) : [];
+    const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+    document.getElementById('totalExpenses').textContent = fmtMoney(totalExpenses);
+    
+    // Recent activity
+    const activities = dbData.activityLogs ? Object.values(dbData.activityLogs) : [];
+    const recentActivity = document.getElementById('recentActivity');
+    if (activities.length > 0) {
+      recentActivity.innerHTML = activities.slice(-5).reverse().map(log => `
+        <div style="padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1);">
+          <div style="display: flex; justify-content: space-between;">
+            <span>${log.action || 'Activity'}</span>
+            <small style="color: #6c757d;">${new Date(log.at).toLocaleDateString()}</small>
+          </div>
+          <small style="color: #6c757d;">${log.details || ''}</small>
+        </div>
+      `).join('');
+    } else {
+      recentActivity.innerHTML = '<p>No recent activity</p>';
+    }
+  } catch (error) {
+    console.error('Error loading dashboard data:', error);
+  }
 }
 
 /* -----------------------------
-   Admin Members (Updated with new fields)
+   Admin Members Management
 ------------------------------*/
-function renderAdminMembers() {
-  const db = ensureDB();
-  setPage("Member Management", "Create, Update, Approve Member with all details.");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Add New Member</h3>
-          <p>Create full member profile with all required information.</p>
+async function renderAdminMembers() {
+  const mainContent = document.getElementById('mainContent');
+  mainContent.innerHTML = `
+    <div style="margin-bottom: 30px;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h2>Member Management</h2>
+        <button class="btn-primary" onclick="openAddMemberModal()" style="width: auto; padding: 10px 20px;">
+          <i class="fas fa-user-plus"></i> Add New Member
+        </button>
+      </div>
+      
+      <div class="glass" style="padding: 20px; border-radius: 15px;">
+        <div style="margin-bottom: 15px;">
+          <input type="text" id="memberSearch" placeholder="Search members..." 
+                 style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                        border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;"
+                 oninput="searchMembers()">
+        </div>
+        
+        <div id="membersList">
+          <p>Loading members...</p>
         </div>
       </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Member Type</label>
-          <select id="m_type">
-            <option value="FOUNDER">Founder Member (FM)</option>
-            <option value="REFERENCE">Reference Member (RM)</option>
-          </select>
-        </div>
-        <div>
-          <label>Member ID (Auto)</label>
-          <input id="m_id_preview" placeholder="FM-001 / RM-001" disabled />
-          <input type="hidden" id="m_id" />
-        </div>
-        <div>
-          <label>Full Name</label>
-          <input id="m_name" placeholder="Member Full Name" />
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Father's Name</label>
-          <input id="m_father" placeholder="Father's Name" />
-        </div>
-        <div>
-          <label>Mother's Name</label>
-          <input id="m_mother" placeholder="Mother's Name" />
-        </div>
-        <div>
-          <label>Date of Birth</label>
-          <input id="m_dob" type="date" />
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Phone Number</label>
-          <div style="display:flex;gap:8px;">
-            <select id="m_country_code" style="width:100px;">
-              <option value="+880">+880 (BD)</option>
-              <option value="+1">+1 (US)</option>
-              <option value="+44">+44 (UK)</option>
-            </select>
-            <input id="m_phone" placeholder="17XXXXXXXX" style="flex:1;" />
-          </div>
-        </div>
-        <div>
-          <label>Email</label>
-          <input id="m_email" placeholder="member@gmail.com" />
-        </div>
-        <div>
-          <label>Shares</label>
-          <input id="m_shares" type="number" value="1" />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Address</label>
-          <input id="m_address" placeholder="Full Address" />
-        </div>
-        <div>
-          <label>Join Date</label>
-          <input id="m_join" type="date" value="${new Date().toISOString().split('T')[0]}" />
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>NID Number</label>
-          <input id="m_nid" placeholder="NID No" />
-        </div>
-        <div>
-          <label>Nominee Name</label>
-          <input id="m_nom_name" placeholder="Nominee Name" />
-        </div>
-        <div>
-          <label>Nominee NID</label>
-          <input id="m_nom_nid" placeholder="Nominee NID" />
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Nominee Relation</label>
-          <select id="m_nom_rel">
-            <option value="Father">Father</option>
-            <option value="Mother">Mother</option>
-            <option value="Husband">Husband</option>
-            <option value="Wife">Wife</option>
-            <option value="Brother">Brother</option>
-            <option value="Sister">Sister</option>
-            <option value="Son">Son</option>
-            <option value="Daughter">Daughter</option>
-            <option value="Other">Other</option>
-          </select>
-        </div>
-        <div>
-          <label>Nominee Phone</label>
-          <input id="m_nom_phone" placeholder="Nominee Phone" />
-        </div>
-        <div>
-          <label>Status</label>
-          <select id="m_status">
-            <option value="PENDING">PENDING</option>
-            <option value="ACTIVE">ACTIVE</option>
-            <option value="DEACTIVE">DEACTIVE</option>
-            <option value="RESIGNED">RESIGNED</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Password</label>
-          <input id="m_pass" placeholder="Create password" />
-        </div>
-        <div>
-          <label>Confirm Password</label>
-          <input id="m_pass2" placeholder="Confirm password" />
-        </div>
-      </div>
-
-      <div class="row row-4">
-        <div>
-          <label>Member Photo</label>
-          <input id="m_photo" type="file" accept="image/*"/>
-        </div>
-        <div>
-          <label>NID Front Photo</label>
-          <input id="m_nid_front" type="file" accept="image/*"/>
-        </div>
-        <div>
-          <label>NID Back Photo</label>
-          <input id="m_nid_back" type="file" accept="image/*"/>
-        </div>
-        <div>
-          <label>Nominee Photo</label>
-          <input id="m_nom_photo" type="file" accept="image/*"/>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="addMemberBtn">Save Member</button>
-
-      <div class="hint">
-        ✔ Member will be saved with PENDING status. Admin must approve after verification.<br/>
-        ✔ Member ID auto-generated based on member type (FM-001 or RM-001).
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>All Members</h3>
-          <p>Search, view, approve, update members.</p>
-        </div>
-        <div class="panelTools">
-          <input id="memberSearch" placeholder="Search member by name/id/phone..." />
-        </div>
-      </div>
-
-      <div id="membersTable"></div>
     </div>
   `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  // Add event listeners
-  document.getElementById('m_type').addEventListener('change', updateMemberIdPreview);
-  document.getElementById('addMemberBtn').addEventListener('click', adminAddMember);
-  document.getElementById('memberSearch').addEventListener('input', renderAdminMembersTable);
-
-  updateMemberIdPreview();
-  renderAdminMembersTable();
+  
+  loadMembers();
 }
 
-function updateMemberIdPreview() {
-  const type = document.getElementById("m_type").value;
-  const prefix = type === "FOUNDER" ? "FM" : "RM";
-  const id = genId(prefix);
-  document.getElementById("m_id_preview").value = id;
-  document.getElementById("m_id").value = id;
-}
-
-function renderAdminMembersTable() {
-  const db = ensureDB();
-  const q = (document.getElementById("memberSearch")?.value || "").toLowerCase().trim();
-
-  const filtered = db.members ? db.members.filter(m => {
-    const s = `${m.id} ${m.name} ${m.fatherName || ''} ${m.motherName || ''} ${m.phone} ${m.email} ${m.nidNo}`.toLowerCase();
-    return s.includes(q);
-  }) : [];
-
-  const html = `
-    <table>
-      <thead>
-        <tr>
-          <th>Member ID</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Phone</th>
-          <th>Status</th>
-          <th>Approved</th>
-          <th>Tools</th>
-        </tr>
-      </thead>
-      <tbody>
-        ${filtered.map(m => {
-    return `
-            <tr>
-              <td><b>${m.id}</b><div class="small">${m.memberType || 'N/A'}</div></td>
-              <td>
-                <b>${m.name}</b>
-                <div class="small">${m.fatherName || ''}</div>
+async function loadMembers() {
+  try {
+    const dbData = await getDB();
+    const members = dbData.members ? Object.values(dbData.members) : [];
+    
+    const membersList = document.getElementById('membersList');
+    if (members.length === 0) {
+      membersList.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+          <div style="font-size: 48px; margin-bottom: 20px;">👥</div>
+          <h3>No Members Found</h3>
+          <p>Add your first member to get started</p>
+          <button class="btn-primary" onclick="openAddMemberModal()" style="margin-top: 20px;">
+            Add New Member
+          </button>
+        </div>
+      `;
+      return;
+    }
+    
+    membersList.innerHTML = `
+      <table style="width: 100%; border-collapse: collapse;">
+        <thead>
+          <tr style="border-bottom: 2px solid rgba(255,255,255,0.1);">
+            <th style="padding: 12px; text-align: left;">Member ID</th>
+            <th style="padding: 12px; text-align: left;">Name</th>
+            <th style="padding: 12px; text-align: left;">Phone</th>
+            <th style="padding: 12px; text-align: left;">Status</th>
+            <th style="padding: 12px; text-align: left;">Actions</th>
+          </tr>
+        </thead>
+        <tbody id="membersTableBody">
+          ${members.map(member => `
+            <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+              <td style="padding: 12px;">
+                <div style="font-weight: bold;">${member.id}</div>
+                <small style="color: #6c757d;">${member.memberType || 'N/A'}</small>
               </td>
-              <td>${m.memberType || 'N/A'}</td>
-              <td>${m.phone}</td>
-              <td><span class="status ${m.status === "ACTIVE" ? "st-approved" : m.status === "PENDING" ? "st-pending" : "st-rejected"}">${m.status}</span></td>
-              <td>${m.approved ? '<span class="status st-approved">YES</span>' : '<span class="status st-pending">NO</span>'}</td>
-              <td>
-                <button class="btn view-member" data-id="${m.id}">View</button>
-                ${!m.approved ? `<button class="btn success approve-member" data-id="${m.id}">Approve</button>` : ''}
-                ${!m.approved ? `<button class="btn warn update-member" data-id="${m.id}">Update</button>` : ''}
-                ${m.approved ? `<button class="btn warn reset-pass" data-id="${m.id}">Reset Pass</button>` : ''}
+              <td style="padding: 12px;">
+                <div style="font-weight: bold;">${member.name}</div>
+                <small style="color: #6c757d;">${member.email || 'No email'}</small>
+              </td>
+              <td style="padding: 12px;">${member.phone || 'N/A'}</td>
+              <td style="padding: 12px;">
+                <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; 
+                      background: ${member.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.2)' : 
+                                  member.approved ? 'rgba(245, 158, 11, 0.2)' : 'rgba(107, 114, 128, 0.2)'}; 
+                      color: ${member.status === 'ACTIVE' ? '#10b981' : 
+                              member.approved ? '#f59e0b' : '#6b7280'}; 
+                      border: 1px solid ${member.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.3)' : 
+                                         member.approved ? 'rgba(245, 158, 11, 0.3)' : 'rgba(107, 114, 128, 0.3)'};">
+                  ${member.approved ? (member.status || 'ACTIVE') : 'PENDING'}
+                </span>
+              </td>
+              <td style="padding: 12px;">
+                <div style="display: flex; gap: 10px;">
+                  <button onclick="viewMember('${member.id}')" style="background: rgba(67, 97, 238, 0.2); 
+                         border: 1px solid rgba(67, 97, 238, 0.3); color: #4361ee; padding: 6px 12px; 
+                         border-radius: 6px; cursor: pointer;">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  ${!member.approved ? `
+                    <button onclick="approveMember('${member.id}')" style="background: rgba(16, 185, 129, 0.2); 
+                           border: 1px solid rgba(16, 185, 129, 0.3); color: #10b981; padding: 6px 12px; 
+                           border-radius: 6px; cursor: pointer;">
+                      <i class="fas fa-check"></i>
+                    </button>
+                  ` : ''}
+                </div>
               </td>
             </tr>
-          `;
-  }).join("") || `<tr><td colspan="7" class="small">No members found.</td></tr>`}
-      </tbody>
-    </table>
-  `;
-  document.getElementById("membersTable").innerHTML = html;
+          `).join('')}
+        </tbody>
+      </table>
+    `;
+  } catch (error) {
+    console.error('Error loading members:', error);
+    document.getElementById('membersList').innerHTML = `
+      <div style="text-align: center; padding: 40px; color: #ef4444;">
+        <i class="fas fa-exclamation-circle" style="font-size: 48px; margin-bottom: 20px;"></i>
+        <p>Error loading members. Please try again.</p>
+      </div>
+    `;
+  }
+}
 
-  // Add event listeners to dynamic buttons
-  document.querySelectorAll('.view-member').forEach(btn => {
-    btn.addEventListener('click', () => viewMember(btn.getAttribute('data-id')));
-  });
-  document.querySelectorAll('.approve-member').forEach(btn => {
-    btn.addEventListener('click', () => approveMember(btn.getAttribute('data-id')));
-  });
-  document.querySelectorAll('.update-member').forEach(btn => {
-    btn.addEventListener('click', () => openMemberForUpdate(btn.getAttribute('data-id')));
-  });
-  document.querySelectorAll('.reset-pass').forEach(btn => {
-    btn.addEventListener('click', () => resetMemberPassword(btn.getAttribute('data-id')));
+function searchMembers() {
+  const search = document.getElementById('memberSearch').value.toLowerCase();
+  const rows = document.querySelectorAll('#membersTableBody tr');
+  
+  rows.forEach(row => {
+    const text = row.textContent.toLowerCase();
+    row.style.display = text.includes(search) ? '' : 'none';
   });
 }
 
-async function adminAddMember() {
-  const db = ensureDB();
-
-  const id = document.getElementById("m_id").value.trim();
-  const name = document.getElementById("m_name").value.trim();
-  const memberType = document.getElementById("m_type").value;
-  const fatherName = document.getElementById("m_father").value.trim();
-  const motherName = document.getElementById("m_mother").value.trim();
-  const dob = document.getElementById("m_dob").value;
-  const countryCode = document.getElementById("m_country_code").value;
-  const phone = document.getElementById("m_phone").value.trim();
-  const fullPhone = countryCode + phone;
-  const email = document.getElementById("m_email").value.trim();
-  const shares = Number(document.getElementById("m_shares").value || 1);
-  const pass = document.getElementById("m_pass").value.trim();
-  const pass2 = document.getElementById("m_pass2").value.trim();
-  const address = document.getElementById("m_address").value.trim();
-  const joinDate = document.getElementById("m_join").value;
-  const nidNo = document.getElementById("m_nid").value.trim();
-
-  const nomineeName = document.getElementById("m_nom_name").value.trim();
-  const nomineeRelation = document.getElementById("m_nom_rel").value;
-  const nomineeNid = document.getElementById("m_nom_nid").value.trim();
-  const nomineePhone = document.getElementById("m_nom_phone").value.trim();
-  const status = document.getElementById("m_status").value;
-
-  if (!id || !name || !pass) {
-    toast("Validation Error", "Member ID, Name and Password required.");
-    return;
-  }
-
-  if (pass !== pass2) {
-    toast("Password Error", "Passwords do not match.");
-    return;
-  }
-
-  if (db.members.find(x => x.id === id)) {
-    toast("Duplicate Member", "This Member ID already exists.");
-    return;
-  }
-
-  const photoFile = document.getElementById("m_photo").files[0];
-  const nidFrontFile = document.getElementById("m_nid_front").files[0];
-  const nidBackFile = document.getElementById("m_nid_back").files[0];
-  const nomineePhotoFile = document.getElementById("m_nom_photo").files[0];
-
-  const photo = photoFile ? await fileToBase64(photoFile) : "";
-  const nidFront = nidFrontFile ? await fileToBase64(nidFrontFile) : "";
-  const nidBack = nidBackFile ? await fileToBase64(nidBackFile) : "";
-  const nomineePhoto = nomineePhotoFile ? await fileToBase64(nomineePhotoFile) : "";
-
-  const approved = status === "ACTIVE";
-
-  if (!db.members) db.members = [];
-
-  db.members.unshift({
-    id, name, memberType, fatherName, motherName, dob,
-    phone: fullPhone, email, shares, pass,
-    address, joinDate,
-    photo, nidNo, nidFront, nidBack,
-    nomineeName, nomineeRelation, nomineeNid, nomineePhone, nomineePhoto,
-    status,
-    approved,
-    createdAt: nowISO(),
-    updatedAt: nowISO()
-  });
-
-  saveDB(db);
-  logActivity("ADD_MEMBER", `Added member: ${id} (${memberType})`);
-  toast("Member Added", `${name} (${id}) saved with ${status} status.`);
-
-  // Reset form and update ID preview
-  document.getElementById("m_name").value = "";
-  document.getElementById("m_father").value = "";
-  document.getElementById("m_mother").value = "";
-  document.getElementById("m_phone").value = "";
-  document.getElementById("m_email").value = "";
-  document.getElementById("m_address").value = "";
-  document.getElementById("m_nid").value = "";
-  document.getElementById("m_nom_name").value = "";
-  document.getElementById("m_nom_nid").value = "";
-  document.getElementById("m_nom_phone").value = "";
-  document.getElementById("m_pass").value = "";
-  document.getElementById("m_pass2").value = "";
-  updateMemberIdPreview();
-  renderAdminMembersTable();
-}
-
-function approveMember(memberId) {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === memberId);
-  if (!m) return;
-
-  // Check for information gaps
-  let missingFields = [];
-  if (!m.nidNo || m.nidNo.trim() === "") missingFields.push("NID Number");
-  if (!m.nomineeName || m.nomineeName.trim() === "") missingFields.push("Nominee Name");
-  if (!m.nomineeNid || m.nomineeNid.trim() === "") missingFields.push("Nominee NID");
-  if (!m.photo || m.photo === "") missingFields.push("Member Photo");
-
-  if (missingFields.length > 0) {
-    toast("Information Gap", `Missing: ${missingFields.join(", ")}. Please update member first.`);
-    openMemberForUpdate(memberId);
-    return;
-  }
-
-  m.approved = true;
-  m.status = "ACTIVE";
-  m.updatedAt = nowISO();
-
-  saveDB(db);
-  logActivity("APPROVE_MEMBER", `Member approved: ${memberId}`);
-
-  // Send notification to member
-  const whatsappMsg = `Dear ${m.name},\nYour member registration has been approved. Your Member ID: ${m.id}\nPassword: ${m.pass}\nLogin: ${window.location.href.split('#')[0]}`;
-  const emailMsg = `Your membership has been approved. Member ID: ${m.id}`;
-
-  sendWhatsAppNotification(m.phone, whatsappMsg);
-  sendEmailNotification(m.email, "Membership Approved", emailMsg);
-
-  toast("Member Approved", `${m.name} has been approved successfully.`);
-  renderAdminMembersTable();
-}
-
-function openMemberForUpdate(memberId) {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === memberId);
-  if (!m) return;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Update Member Information</h3>
-          <p>Fill missing information for: ${m.name} (${m.id})</p>
-        </div>
+function openAddMemberModal() {
+  document.getElementById('modalTitle').textContent = 'Add New Member';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="display: grid; gap: 15px;">
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">Member Type</label>
+        <select id="newMemberType" style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+               border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
+          <option value="FOUNDER">Founder Member</option>
+          <option value="REFERENCE">Reference Member</option>
+          <option value="REGULAR">Regular Member</option>
+        </select>
       </div>
-
-      <div class="row row-2">
-        <div>
-          <label>NID Number *</label>
-          <input id="upd_nid" value="${m.nidNo || ''}" />
-        </div>
-        <div>
-          <label>Member Photo</label>
-          <input id="upd_photo" type="file" accept="image/*"/>
-          ${m.photo ? '<div class="small">Current photo exists</div>' : ''}
-        </div>
+      
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">Full Name *</label>
+        <input type="text" id="newMemberName" placeholder="Enter full name" 
+               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
       </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Nominee Name *</label>
-          <input id="upd_nom_name" value="${m.nomineeName || ''}" />
-        </div>
-        <div>
-          <label>Nominee NID *</label>
-          <input id="upd_nom_nid" value="${m.nomineeNid || ''}" />
-        </div>
-        <div>
-          <label>Nominee Relation</label>
-          <select id="upd_nom_rel">
-            <option value="Father" ${m.nomineeRelation === 'Father' ? 'selected' : ''}>Father</option>
-            <option value="Mother" ${m.nomineeRelation === 'Mother' ? 'selected' : ''}>Mother</option>
-            <option value="Husband" ${m.nomineeRelation === 'Husband' ? 'selected' : ''}>Husband</option>
-            <option value="Wife" ${m.nomineeRelation === 'Wife' ? 'selected' : ''}>Wife</option>
-            <option value="Brother" ${m.nomineeRelation === 'Brother' ? 'selected' : ''}>Brother</option>
-            <option value="Sister" ${m.nomineeRelation === 'Sister' ? 'selected' : ''}>Sister</option>
-            <option value="Son" ${m.nomineeRelation === 'Son' ? 'selected' : ''}>Son</option>
-            <option value="Daughter" ${m.nomineeRelation === 'Daughter' ? 'selected' : ''}>Daughter</option>
-            <option value="Other" ${m.nomineeRelation === 'Other' ? 'selected' : ''}>Other</option>
-          </select>
-        </div>
+      
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">Email Address *</label>
+        <input type="email" id="newMemberEmail" placeholder="Enter email" 
+               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
       </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Father's Name</label>
-          <input id="upd_father" value="${m.fatherName || ''}" />
-        </div>
-        <div>
-          <label>Mother's Name</label>
-          <input id="upd_mother" value="${m.motherName || ''}" />
-        </div>
-        <div>
-          <label>Date of Birth</label>
-          <input id="upd_dob" type="date" value="${m.dob || ''}" />
-        </div>
+      
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">Phone Number *</label>
+        <input type="tel" id="newMemberPhone" placeholder="Enter phone number" 
+               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
       </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="updateMemberBtn">Update Information</button>
-      <button class="btn">Cancel</button>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Update Member";
-  document.getElementById("viewerSub").innerText = "Fill missing information";
-  document.getElementById("viewerBody").innerHTML = html;
-
-  // Add event listener
-  document.getElementById('updateMemberBtn').addEventListener('click', () => updateMemberInfo(memberId));
-
-  openModal("modalViewer");
-}
-
-async function updateMemberInfo(memberId) {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === memberId);
-  if (!m) return;
-
-  const nidNo = document.getElementById("upd_nid").value.trim();
-  const nomineeName = document.getElementById("upd_nom_name").value.trim();
-  const nomineeNid = document.getElementById("upd_nom_nid").value.trim();
-  const nomineeRelation = document.getElementById("upd_nom_rel").value;
-  const fatherName = document.getElementById("upd_father").value.trim();
-  const motherName = document.getElementById("upd_mother").value.trim();
-  const dob = document.getElementById("upd_dob").value;
-
-  if (!nidNo || !nomineeName || !nomineeNid) {
-    toast("Required Fields", "Please fill all required fields (*)");
-    return;
-  }
-
-  const photoFile = document.getElementById("upd_photo").files[0];
-  if (photoFile) {
-    m.photo = await fileToBase64(photoFile);
-  }
-
-  m.nidNo = nidNo;
-  m.nomineeName = nomineeName;
-  m.nomineeNid = nomineeNid;
-  m.nomineeRelation = nomineeRelation;
-  m.fatherName = fatherName;
-  m.motherName = motherName;
-  m.dob = dob;
-  m.updatedAt = nowISO();
-
-  saveDB(db);
-  logActivity("UPDATE_MEMBER", `Updated member info: ${memberId}`);
-  toast("Information Updated", "Member information updated successfully.");
-  closeModal("modalViewer");
-  renderAdminMembersTable();
-}
-
-function viewMember(memberId) {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === memberId);
-  if (!m) return;
-
-  const deposits = db.deposits ? db.deposits.filter(d => d.memberId === memberId && d.status === "APPROVED")
-    .reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>${m.name} (${m.id})</h3>
-          <p>Full Profile Information</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Member Photo</label>
-          ${m.photo ? `<img src="${m.photo}" style="width:120px;height:120px;border-radius:18px;border:1px solid var(--line);object-fit:cover;">` : `<div class="small">No Photo</div>`}
-        </div>
-        <div>
-          <label>Nominee Photo</label>
-          ${m.nomineePhoto ? `<img src="${m.nomineePhoto}" style="width:120px;height:120px;border-radius:18px;border:1px solid var(--line);object-fit:cover;">` : `<div class="small">No Photo</div>`}
-        </div>
-        <div>
-          <label>Status</label>
-          <div><span class="status ${m.status === "ACTIVE" ? "st-approved" : m.status === "PENDING" ? "st-pending" : "st-rejected"}">${m.status}</span></div>
-          <div class="small" style="margin-top:8px;">Type: <b>${m.memberType}</b></div>
-          <div class="small">Shares: <b>${m.shares}</b></div>
-          <div class="small">Approved: <b>${m.approved ? 'YES' : 'NO'}</b></div>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row row-3">
-        <div>
-          <label>Father's Name</label>
-          <input value="${m.fatherName || 'Not set'}" disabled />
-        </div>
-        <div>
-          <label>Mother's Name</label>
-          <input value="${m.motherName || 'Not set'}" disabled />
-        </div>
-        <div>
-          <label>Date of Birth</label>
-          <input value="${m.dob || 'Not set'}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Phone</label>
-          <input value="${m.phone}" disabled />
-        </div>
-        <div>
-          <label>Email</label>
-          <input value="${m.email}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Address</label>
-          <input value="${m.address}" disabled />
-        </div>
-        <div>
-          <label>Join Date</label>
-          <input value="${m.joinDate}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>NID No</label>
-          <input value="${m.nidNo || 'Not set'}" disabled />
-        </div>
-        <div>
-          <label>Password</label>
-          <input value="${m.pass}" disabled />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <h4>Nominee Information</h4>
-
-      <div class="row row-3">
-        <div>
-          <label>Nominee Name</label>
-          <input value="${m.nomineeName || 'Not set'}" disabled />
-        </div>
-        <div>
-          <label>Nominee Relation</label>
-          <input value="${m.nomineeRelation || 'Not set'}" disabled />
-        </div>
-        <div>
-          <label>Nominee NID</label>
-          <input value="${m.nomineeNid || 'Not set'}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Nominee Phone</label>
-          <input value="${m.nomineePhone || 'Not set'}" disabled />
-        </div>
-        <div></div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row row-2">
-        <div>
-          <label>NID Front</label>
-          ${m.nidFront ? `<img src="${m.nidFront}" style="width:100%;max-width:320px;border-radius:18px;border:1px solid var(--line);">` : `<div class="small">No file</div>`}
-        </div>
-        <div>
-          <label>NID Back</label>
-          ${m.nidBack ? `<img src="${m.nidBack}" style="width:100%;max-width:320px;border-radius:18px;border:1px solid var(--line);">` : `<div class="small">No file</div>`}
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <div class="hint">
-        Total Approved Deposits: <b>${fmtMoney(deposits)}</b>
+      
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">Password *</label>
+        <input type="password" id="newMemberPassword" placeholder="Create password" 
+               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
       </div>
     </div>
   `;
-
-  document.getElementById("viewerTitle").innerText = "Member Viewer";
-  document.getElementById("viewerSub").innerText = "Member profile details preview";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
+  
+  document.getElementById('modalFooter').innerHTML = `
+    <button class="btn-primary" onclick="closeModal('customModal')" 
+            style="background: #6c757d; padding: 10px 20px;">
+      Cancel
+    </button>
+    <button class="btn-primary" onclick="saveNewMember()" style="padding: 10px 20px;">
+      Save Member
+    </button>
+  `;
+  
+  openModal('customModal');
 }
 
-function resetMemberPassword(memberId) {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === memberId);
-  if (!m) return;
+async function saveNewMember() {
+  const name = document.getElementById('newMemberName').value.trim();
+  const email = document.getElementById('newMemberEmail').value.trim();
+  const phone = document.getElementById('newMemberPhone').value.trim();
+  const password = document.getElementById('newMemberPassword').value;
+  const memberType = document.getElementById('newMemberType').value;
+  
+  if (!name || !email || !phone || !password) {
+    showToast('Please fill all required fields', 'error');
+    return;
+  }
+  
+  try {
+    const dbData = await getDB();
+    const members = dbData.members || {};
+    
+    // Generate member ID
+    const prefix = memberType === 'FOUNDER' ? 'FM' : memberType === 'REFERENCE' ? 'RM' : 'MEM';
+    const memberCount = Object.keys(members).filter(k => k.startsWith(prefix)).length;
+    const memberId = `${prefix}-${String(memberCount + 1).padStart(3, '0')}`;
+    
+    // Create member object
+    const memberData = {
+      id: memberId,
+      name,
+      email,
+      phone,
+      pass: password,
+      memberType,
+      status: 'ACTIVE',
+      approved: false,
+      shares: 1,
+      joinDate: new Date().toISOString().split('T')[0],
+      createdAt: nowISO(),
+      updatedAt: nowISO()
+    };
+    
+    // Save to Firebase
+    await updateDB(`members/${memberId}`, memberData);
+    
+    // Log activity
+    await logActivity('ADD_MEMBER', `Added new member: ${name} (${memberId})`);
+    
+    showToast(`Member ${name} added successfully`, 'success');
+    closeModal('customModal');
+    renderAdminMembers();
+    
+  } catch (error) {
+    console.error('Error saving member:', error);
+    showToast('Failed to save member', 'error');
+  }
+}
 
-  const newPass = prompt("Enter new password for " + memberId);
-  if (!newPass) return;
+async function viewMember(memberId) {
+  try {
+    const snapshot = await db.get(`members/${memberId}`);
+    if (!snapshot.exists()) {
+      showToast('Member not found', 'error');
+      return;
+    }
+    
+    const member = snapshot.val();
+    
+    document.getElementById('modalTitle').textContent = `Member: ${member.name}`;
+    document.getElementById('modalBody').innerHTML = `
+      <div style="display: grid; gap: 20px;">
+        <div>
+          <h4 style="color: #4cc9f0; margin-bottom: 10px;">Personal Information</h4>
+          <div style="display: grid; gap: 10px;">
+            <div>
+              <strong>Member ID:</strong> ${member.id}
+            </div>
+            <div>
+              <strong>Name:</strong> ${member.name}
+            </div>
+            <div>
+              <strong>Email:</strong> ${member.email || 'N/A'}
+            </div>
+            <div>
+              <strong>Phone:</strong> ${member.phone || 'N/A'}
+            </div>
+            <div>
+              <strong>Type:</strong> ${member.memberType || 'N/A'}
+            </div>
+            <div>
+              <strong>Status:</strong> 
+              <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; 
+                    background: ${member.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.2)' : 
+                                member.approved ? 'rgba(245, 158, 11, 0.2)' : 'rgba(107, 114, 128, 0.2)'}; 
+                    color: ${member.status === 'ACTIVE' ? '#10b981' : 
+                            member.approved ? '#f59e0b' : '#6b7280'}; 
+                    border: 1px solid ${member.status === 'ACTIVE' ? 'rgba(16, 185, 129, 0.3)' : 
+                                       member.approved ? 'rgba(245, 158, 11, 0.3)' : 'rgba(107, 114, 128, 0.3)'};">
+                ${member.approved ? (member.status || 'ACTIVE') : 'PENDING'}
+              </span>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <h4 style="color: #4cc9f0; margin-bottom: 10px;">Account Information</h4>
+          <div style="display: grid; gap: 10px;">
+            <div>
+              <strong>Join Date:</strong> ${member.joinDate || 'N/A'}
+            </div>
+            <div>
+              <strong>Shares:</strong> ${member.shares || 1}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+    
+    document.getElementById('modalFooter').innerHTML = `
+      <button class="btn-primary" onclick="closeModal('customModal')" style="padding: 10px 20px;">
+        Close
+      </button>
+      ${!member.approved ? `
+        <button class="btn-primary" onclick="approveMember('${memberId}')" 
+                style="background: linear-gradient(135deg, #10b981, #059669); padding: 10px 20px;">
+          Approve Member
+        </button>
+      ` : ''}
+    `;
+    
+    openModal('customModal');
+    
+  } catch (error) {
+    console.error('Error viewing member:', error);
+    showToast('Failed to load member data', 'error');
+  }
+}
 
-  m.pass = newPass;
-  m.updatedAt = nowISO();
-  saveDB(db);
-
-  logActivity("RESET_MEMBER_PASSWORD", `Password reset for ${memberId}`);
-  toast("Password Reset", `New password saved for ${memberId}`);
-  renderAdminMembersTable();
+async function approveMember(memberId) {
+  if (!confirm('Are you sure you want to approve this member?')) return;
+  
+  try {
+    await updateDB(`members/${memberId}`, {
+      approved: true,
+      status: 'ACTIVE',
+      updatedAt: nowISO()
+    });
+    
+    // Get member data
+    const snapshot = await db.get(`members/${memberId}`);
+    const member = snapshot.val();
+    
+    // Log activity
+    await logActivity('APPROVE_MEMBER', `Approved member: ${member.name} (${memberId})`);
+    
+    showToast(`Member ${member.name} approved successfully`, 'success');
+    closeModal('customModal');
+    renderAdminMembers();
+    
+  } catch (error) {
+    console.error('Error approving member:', error);
+    showToast('Failed to approve member', 'error');
+  }
 }
 
 /* -----------------------------
-   Member Deposit Submit (Updated)
+   Member Dashboard
 ------------------------------*/
-function renderMemberDeposit() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-  setPage("Submit Deposit", "Submit monthly deposit with proper details.");
+async function renderMemberDashboard() {
+  const mainContent = document.getElementById('mainContent');
+  mainContent.innerHTML = `
+    <div style="margin-bottom: 30px;">
+      <div class="glass" style="padding: 20px; border-radius: 15px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 20px; margin-bottom: 20px;">
+          <div style="width: 60px; height: 60px; background: linear-gradient(135deg, #4361ee, #7209b7); 
+               border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 24px;">
+            ${SESSION.user.name.charAt(0)}
+          </div>
+          <div>
+            <h2>Welcome, ${SESSION.user.name}!</h2>
+            <p style="color: #6c757d;">Member ID: ${SESSION.user.id}</p>
+          </div>
+        </div>
+      </div>
+      
+      <div class="glass" style="padding: 20px; border-radius: 15px;">
+        <h3 style="margin-bottom: 15px;">Your Summary</h3>
+        <div id="memberSummary">
+          <p>Loading your data...</p>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  loadMemberDashboardData();
+}
 
-  const currentMonth = monthKey();
-  const required = m.shares * db.meta.monthlyShareAmount;
+async function loadMemberDashboardData() {
+  try {
+    const dbData = await getDB();
+    const memberId = SESSION.user.id;
+    
+    // Get member deposits
+    const deposits = dbData.deposits ? Object.values(dbData.deposits) : [];
+    const memberDeposits = deposits.filter(d => d.memberId === memberId);
+    const approvedDeposits = memberDeposits.filter(d => d.status === 'APPROVED');
+    const totalDeposit = approvedDeposits.reduce((sum, d) => sum + Number(d.amount || 0), 0);
+    
+    // Get current month status
+    const currentMonth = monthKey();
+    const thisMonthApproved = approvedDeposits.find(d => d.month === currentMonth);
+    const thisMonthPending = memberDeposits.find(d => d.month === currentMonth && d.status === 'PENDING');
+    const monthlyDue = SESSION.user.shares * (dbData.meta?.monthlyShareAmount || 10000);
+    const due = thisMonthApproved ? 0 : monthlyDue;
+    
+    const memberSummary = document.getElementById('memberSummary');
+    memberSummary.innerHTML = `
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 20px;">
+        <div style="background: rgba(67, 97, 238, 0.1); padding: 15px; border-radius: 10px; border: 1px solid rgba(67, 97, 238, 0.2);">
+          <div style="font-size: 24px; margin-bottom: 5px;">${fmtMoney(totalDeposit)}</div>
+          <div style="color: #6c757d; font-size: 14px;">Total Deposits</div>
+        </div>
+        
+        <div style="background: rgba(16, 185, 129, 0.1); padding: 15px; border-radius: 10px; border: 1px solid rgba(16, 185, 129, 0.2);">
+          <div style="font-size: 24px; margin-bottom: 5px;">${SESSION.user.shares || 1}</div>
+          <div style="color: #6c757d; font-size: 14px;">Shares</div>
+        </div>
+        
+        <div style="background: rgba(245, 158, 11, 0.1); padding: 15px; border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.2);">
+          <div style="font-size: 24px; margin-bottom: 5px;">${fmtMoney(due)}</div>
+          <div style="color: #6c757d; font-size: 14px;">Current Due</div>
+        </div>
+      </div>
+      
+      <div style="background: ${thisMonthApproved ? 'rgba(16, 185, 129, 0.1)' : 
+                           thisMonthPending ? 'rgba(245, 158, 11, 0.1)' : 'rgba(239, 68, 68, 0.1)'}; 
+           padding: 20px; border-radius: 10px; border: 1px solid ${thisMonthApproved ? 'rgba(16, 185, 129, 0.2)' : 
+                                                               thisMonthPending ? 'rgba(245, 158, 11, 0.2)' : 'rgba(239, 68, 68, 0.2)'};">
+        <div style="display: flex; align-items: center; gap: 15px; margin-bottom: 15px;">
+          <div style="font-size: 24px;">
+            ${thisMonthApproved ? '✓' : thisMonthPending ? '⏳' : '⚠️'}
+          </div>
+          <div>
+            <h4>${currentMonth} Status</h4>
+            <p style="color: #6c757d;">
+              ${thisMonthApproved ? 'Deposit approved' : 
+                thisMonthPending ? 'Deposit pending approval' : 
+                'Deposit not submitted'}
+            </p>
+          </div>
+        </div>
+        
+        ${!thisMonthApproved && !thisMonthPending ? `
+          <div>
+            <p style="margin-bottom: 10px;">Monthly Due: <strong>${fmtMoney(monthlyDue)}</strong></p>
+            <button class="btn-primary" onclick="go('member_deposit')" style="padding: 10px 20px;">
+              Submit Deposit Now
+            </button>
+          </div>
+        ` : ''}
+      </div>
+    `;
+    
+  } catch (error) {
+    console.error('Error loading member dashboard:', error);
+    document.getElementById('memberSummary').innerHTML = `
+      <div style="text-align: center; padding: 20px; color: #ef4444;">
+        <i class="fas fa-exclamation-circle" style="font-size: 24px; margin-bottom: 10px;"></i>
+        <p>Error loading your data</p>
+      </div>
+    `;
+  }
+}
 
-  // Generate month and year dropdowns
-  let monthOptions = "";
-  const currentYear = new Date().getFullYear();
-  const currentMonthNum = new Date().getMonth() + 1;
+/* -----------------------------
+   Member Profile
+------------------------------*/
+async function renderMemberProfile() {
+  const mainContent = document.getElementById('mainContent');
+  
+  const profileHTML = `
+    <div class="glass" style="padding: 30px; border-radius: 15px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="width: 80px; height: 80px; background: linear-gradient(135deg, #4361ee, #7209b7); 
+             border-radius: 50%; display: flex; align-items: center; justify-content: center; 
+             font-size: 32px; margin: 0 auto 15px;">
+          ${SESSION.user.name.charAt(0)}
+        </div>
+        <h2>${SESSION.user.name}</h2>
+        <p style="color: #6c757d;">${SESSION.user.memberType || 'Member'} • ID: ${SESSION.user.id}</p>
+      </div>
+      
+      <div style="display: grid; gap: 20px;">
+        <div>
+          <h4 style="color: #4cc9f0; margin-bottom: 10px;">Personal Information</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            <div>
+              <strong>Email:</strong>
+              <p style="margin-top: 5px;">${SESSION.user.email || 'Not provided'}</p>
+            </div>
+            <div>
+              <strong>Phone:</strong>
+              <p style="margin-top: 5px;">${SESSION.user.phone || 'Not provided'}</p>
+            </div>
+            <div>
+              <strong>Address:</strong>
+              <p style="margin-top: 5px;">${SESSION.user.address || 'Not provided'}</p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <h4 style="color: #4cc9f0; margin-bottom: 10px;">Account Information</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px;">
+            <div>
+              <strong>Shares:</strong>
+              <p style="margin-top: 5px;">${SESSION.user.shares || 1}</p>
+            </div>
+            <div>
+              <strong>Join Date:</strong>
+              <p style="margin-top: 5px;">${SESSION.user.joinDate || 'Not available'}</p>
+            </div>
+            <div>
+              <strong>Status:</strong>
+              <p style="margin-top: 5px;">
+                <span style="display: inline-block; padding: 4px 12px; border-radius: 20px; 
+                      background: rgba(16, 185, 129, 0.2); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">
+                  ACTIVE
+                </span>
+              </p>
+            </div>
+          </div>
+        </div>
+        
+        <div>
+          <h4 style="color: #4cc9f0; margin-bottom: 10px;">Quick Actions</h4>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+            <button class="btn-primary" onclick="go('member_deposit')" style="padding: 12px;">
+              <i class="fas fa-money-bill-wave"></i> Submit Deposit
+            </button>
+            <button class="btn-primary" onclick="showChangePassword()" style="padding: 12px;">
+              <i class="fas fa-key"></i> Change Password
+            </button>
+            <button class="btn-primary" onclick="openModal('modalCompanyInfo')" style="padding: 12px;">
+              <i class="fas fa-building"></i> Company Info
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  mainContent.innerHTML = profileHTML;
+}
 
+function showChangePassword() {
+  document.getElementById('modalTitle').textContent = 'Change Password';
+  document.getElementById('modalBody').innerHTML = `
+    <div style="display: grid; gap: 15px;">
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">Current Password</label>
+        <input type="password" id="currentPassword" 
+               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
+      </div>
+      
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">New Password</label>
+        <input type="password" id="newPassword" 
+               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
+      </div>
+      
+      <div>
+        <label style="display: block; margin-bottom: 5px; color: #6c757d;">Confirm New Password</label>
+        <input type="password" id="confirmPassword" 
+               style="width: 100%; padding: 10px; background: rgba(255,255,255,0.05); 
+                      border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
+      </div>
+    </div>
+  `;
+  
+  document.getElementById('modalFooter').innerHTML = `
+    <button class="btn-primary" onclick="closeModal('customModal')" 
+            style="background: #6c757d; padding: 10px 20px;">
+      Cancel
+    </button>
+    <button class="btn-primary" onclick="changePassword()" style="padding: 10px 20px;">
+      Update Password
+    </button>
+  `;
+  
+  openModal('customModal');
+}
+
+async function changePassword() {
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+  
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    showToast('Please fill all fields', 'error');
+    return;
+  }
+  
+  if (newPassword !== confirmPassword) {
+    showToast('New passwords do not match', 'error');
+    return;
+  }
+  
+  if (currentPassword !== SESSION.user.pass) {
+    showToast('Current password is incorrect', 'error');
+    return;
+  }
+  
+  try {
+    await updateDB(`members/${SESSION.user.id}`, {
+      pass: newPassword,
+      updatedAt: nowISO()
+    });
+    
+    // Update session
+    SESSION.user.pass = newPassword;
+    
+    showToast('Password updated successfully', 'success');
+    closeModal('customModal');
+    
+  } catch (error) {
+    console.error('Error changing password:', error);
+    showToast('Failed to update password', 'error');
+  }
+}
+
+/* -----------------------------
+   Member Deposit Submission
+------------------------------*/
+async function renderMemberDeposit() {
+  const mainContent = document.getElementById('mainContent');
+  
+  // Get member data
+  const memberId = SESSION.user.id;
+  const snapshot = await db.get(`members/${memberId}`);
+  const member = snapshot.exists() ? snapshot.val() : SESSION.user;
+  
+  const monthlyDue = member.shares * (SESSION.db?.meta?.monthlyShareAmount || 10000);
+  
+  // Generate month options
+  const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
+  const currentMonth = currentDate.getMonth() + 1;
+  let monthOptions = '';
+  
   for (let year = 2024; year <= currentYear; year++) {
-    const maxMonth = year === currentYear ? currentMonthNum : 12;
+    const maxMonth = year === currentYear ? currentMonth : 12;
     for (let month = 1; month <= maxMonth; month++) {
       const monthStr = String(month).padStart(2, '0');
       const value = `${year}-${monthStr}`;
-      const display = `${year} - ${getMonthName(month)}`;
-      monthOptions += `<option value="${value}" ${value === currentMonth ? 'selected' : ''}>${display}</option>`;
+      const monthName = new Date(year, month - 1).toLocaleString('default', { month: 'long' });
+      monthOptions += `<option value="${value}">${monthName} ${year}</option>`;
     }
   }
-
-  function getMonthName(month) {
-    const months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
-    return months[month - 1];
-  }
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Monthly Deposit Submission</h3>
-          <p>Share Based Deposit. Required amount auto calculated.</p>
+  
+  mainContent.innerHTML = `
+    <div class="glass" style="padding: 30px; border-radius: 15px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="font-size: 48px; margin-bottom: 15px;">💰</div>
+        <h2>Submit Monthly Deposit</h2>
+        <p style="color: #6c757d;">Complete your monthly deposit submission</p>
+      </div>
+      
+      <div style="background: rgba(67, 97, 238, 0.1); padding: 20px; border-radius: 10px; margin-bottom: 30px;">
+        <h4 style="color: #4cc9f0; margin-bottom: 15px;">Deposit Summary</h4>
+        <div style="display: grid; gap: 10px;">
+          <div style="display: flex; justify-content: space-between;">
+            <span>Member Name:</span>
+            <strong>${member.name}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Your Shares:</span>
+            <strong>${member.shares}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between;">
+            <span>Monthly Share Amount:</span>
+            <strong>${fmtMoney(SESSION.db?.meta?.monthlyShareAmount || 10000)}</strong>
+          </div>
+          <div style="display: flex; justify-content: space-between; padding-top: 10px; border-top: 1px solid rgba(255,255,255,0.1);">
+            <span>Total Amount Due:</span>
+            <strong style="color: #4cc9f0; font-size: 18px;">${fmtMoney(monthlyDue)}</strong>
+          </div>
         </div>
       </div>
-
-      <div class="row row-3">
+      
+      <div style="display: grid; gap: 20px;">
         <div>
-          <label>Select Month & Year *</label>
-          <select id="d_month">${monthOptions}</select>
-        </div>
-        <div>
-          <label>Amount (Auto)</label>
-          <input id="d_amount" value="${required}" disabled />
-        </div>
-        <div>
-          <label>Payment Method *</label>
-          <select id="d_method">
-            <option value="Bkash">Bkash</option>
-            <option value="Rocket">Rocket</option>
-            <option value="Bank Transfer">Bank Transfer</option>
-            <option value="Cash">Cash</option>
-            <option value="Cash Deposit">Cash Deposit</option>
+          <label style="display: block; margin-bottom: 8px; color: #6c757d;">Select Month *</label>
+          <select id="depositMonth" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+                 border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
+            ${monthOptions}
           </select>
         </div>
-      </div>
-
-      <div id="bankFields" style="display:none;">
-        <div class="row row-2">
-          <div>
-            <label>From Bank</label>
-            <select id="d_from_bank">
-              ${BANGLADESH_BANKS.map(b => `<option>${b}</option>`).join('')}
-            </select>
-          </div>
-          <div>
-            <label>To Bank</label>
-            <select id="d_to_bank">
-              ${BANGLADESH_BANKS.map(b => `<option>${b}</option>`).join('')}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      <div class="row row-2">
+        
         <div>
-          <label>Transaction ID *</label>
-          <input id="d_trx" placeholder="Enter TRX ID" />
+          <label style="display: block; margin-bottom: 8px; color: #6c757d;">Deposit Amount *</label>
+          <input type="number" id="depositAmount" value="${monthlyDue}" readonly
+                 style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+                        border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
         </div>
+        
         <div>
-          <label>Deposit Date *</label>
-          <input id="d_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
+          <label style="display: block; margin-bottom: 8px; color: #6c757d;">Payment Method *</label>
+          <select id="depositMethod" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+                 border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
+            <option value="BKASH">Bkash</option>
+            <option value="ROCKET">Rocket</option>
+            <option value="BANK">Bank Transfer</option>
+            <option value="CASH">Cash</option>
+          </select>
         </div>
-      </div>
-
-      <div class="row row-2">
+        
+        <div id="bankFields" style="display: none;">
+          <label style="display: block; margin-bottom: 8px; color: #6c757d;">Bank Name</label>
+          <select id="depositBank" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+                 border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
+            <option value="Sonali Bank">Sonali Bank</option>
+            <option value="Janata Bank">Janata Bank</option>
+            <option value="Agrani Bank">Agrani Bank</option>
+            <option value="Islami Bank">Islami Bank</option>
+            <option value="BRAC Bank">BRAC Bank</option>
+          </select>
+        </div>
+        
         <div>
-          <label>Deposit Slip Upload</label>
-          <input id="d_slip" type="file" accept="image/*" />
+          <label style="display: block; margin-bottom: 8px; color: #6c757d;">Transaction ID *</label>
+          <input type="text" id="depositTrx" placeholder="Enter transaction ID"
+                 style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+                        border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
         </div>
+        
         <div>
-          <label>Notes</label>
-          <input id="d_note" placeholder="Optional note..." />
+          <label style="display: block; margin-bottom: 8px; color: #6c757d;">Deposit Date *</label>
+          <input type="date" id="depositDate" value="${new Date().toISOString().split('T')[0]}"
+                 style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+                        border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white;">
         </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="submitDepositBtn">Submit Deposit</button>
-
-      <div class="hint">
-        ✔ Deposit ID will be auto-generated: DP-${currentYear}-000001<br/>
-        ✔ Submit করলে Deposit Pending হবে। Admin Approve করলে MR ID generate হবে।
-      </div>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  // Add event listeners
-  document.getElementById('d_method').addEventListener('change', toggleBankFields);
-  document.getElementById('submitDepositBtn').addEventListener('click', validateDeposit);
-}
-
-function toggleBankFields() {
-  const method = document.getElementById("d_method").value;
-  const bankFields = document.getElementById("bankFields");
-  bankFields.style.display = (method === "Bank Transfer") ? "block" : "none";
-}
-
-function validateDeposit() {
-  const month = document.getElementById("d_month").value.trim();
-  const method = document.getElementById("d_method").value;
-  const trxId = document.getElementById("d_trx").value.trim();
-  const date = document.getElementById("d_date").value;
-
-  if (!month || !method || !trxId || !date) {
-    toast("Validation Error", "Please fill all required fields (*)");
-    return;
-  }
-
-  if (method === "Bank Transfer") {
-    const fromBank = document.getElementById("d_from_bank").value;
-    const toBank = document.getElementById("d_to_bank").value;
-    if (!fromBank || !toBank) {
-      toast("Validation Error", "Please select both From and To banks");
-      return;
-    }
-  }
-
-  // Show confirmation modal
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-  const required = m.shares * db.meta.monthlyShareAmount;
-
-  let bankInfo = "";
-  if (method === "Bank Transfer") {
-    const fromBank = document.getElementById("d_from_bank").value;
-    const toBank = document.getElementById("d_to_bank").value;
-    bankInfo = `<div class="row"><b>Bank Transfer:</b> ${fromBank} → ${toBank}</div>`;
-  }
-
-  const confirmContent = `
-    <div class="panel">
-      <h3>Please verify your deposit details:</h3>
-      <div class="hr"></div>
-
-      <div class="row"><b>Member:</b> ${m.name} (${m.id})</div>
-      <div class="row"><b>Month:</b> ${month}</div>
-      <div class="row"><b>Amount:</b> ${fmtMoney(required)}</div>
-      <div class="row"><b>Payment Method:</b> ${method}</div>
-      <div class="row"><b>Transaction ID:</b> ${trxId}</div>
-      ${bankInfo}
-      <div class="row"><b>Deposit Date:</b> ${date}</div>
-
-      <div class="hr"></div>
-      <div class="hint">Click Confirm to submit this deposit. Status will be PENDING until admin approval.</div>
-    </div>
-  `;
-
-  document.getElementById("depositConfirmContent").innerHTML = confirmContent;
-  openModal("modalDepositConfirm");
-}
-
-async function confirmDepositSubmit() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-
-  const month = document.getElementById("d_month").value.trim();
-  const method = document.getElementById("d_method").value;
-  const trxId = document.getElementById("d_trx").value.trim();
-  const date = document.getElementById("d_date").value;
-  const note = document.getElementById("d_note").value.trim();
-
-  const required = m.shares * db.meta.monthlyShareAmount;
-
-  // Check for existing deposit for this month
-  const already = db.deposits ? db.deposits.find(d => d.memberId === m.id && d.month === month && (d.status === "PENDING" || d.status === "APPROVED")) : null;
-  if (already) {
-    toast("Duplicate Deposit", "This month deposit already exists.");
-    closeModal("modalDepositConfirm");
-    return;
-  }
-
-  let fromBank = "", toBank = "";
-  if (method === "Bank Transfer") {
-    fromBank = document.getElementById("d_from_bank").value;
-    toBank = document.getElementById("d_to_bank").value;
-  }
-
-  const slipFile = document.getElementById("d_slip").files[0];
-  const slip = slipFile ? await fileToBase64(slipFile) : "";
-
-  const depositId = genId("DP");
-  if (!db.deposits) db.deposits = [];
-
-  db.deposits.unshift({
-    id: depositId,
-    memberId: m.id,
-    month,
-    amount: required,
-    paymentMethod: method,
-    fromBank,
-    toBank,
-    trxId,
-    slip,
-    note,
-    status: "PENDING",
-    mrId: "",
-    depositDate: date,
-    submittedAt: nowISO(),
-    approvedAt: "",
-    approvedBy: ""
-  });
-
-  saveDB(db);
-  logActivity("SUBMIT_DEPOSIT", `Member submitted deposit ${depositId}`);
-
-  // Send notification to admin
-  const admins = db.admins.filter(a => a.active);
-  admins.forEach(admin => {
-    const whatsappMsg = `New deposit submitted!\nMember: ${m.name} (${m.id})\nAmount: ${fmtMoney(required)}\nMonth: ${month}\nDeposit ID: ${depositId}`;
-    sendWhatsAppNotification(admin.phone || "+8801234567890", whatsappMsg);
-  });
-
-  toast("Deposit Submitted", "Deposit submitted successfully. Waiting for approval.");
-  closeModal("modalDepositConfirm");
-
-  // Show deposit receipt preview
-  showDepositReceipt(depositId);
-}
-
-function showDepositReceipt(depositId) {
-  const db = ensureDB();
-  const d = db.deposits.find(x => x.id === depositId);
-  const m = db.members.find(x => x.id === d.memberId);
-
-  const html = `
-    <div class="panel">
-      <h3>Deposit Submitted Successfully!</h3>
-      <p>Your deposit has been submitted for admin approval.</p>
-
-      <div class="hr"></div>
-
-      <div class="row">
-        <div><b>Deposit ID:</b> ${d.id}</div>
-        <div><b>Status:</b> <span class="status st-pending">PENDING</span></div>
-        <div><b>Submitted At:</b> ${new Date(d.submittedAt).toLocaleString()}</div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="hint">
-        Please wait for admin approval. Once approved, you will receive MR receipt.<br/>
-        You can check status in Deposit History.
-      </div>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Deposit Submitted";
-  document.getElementById("viewerSub").innerText = "Deposit submitted successfully";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
-}
-
-/* -----------------------------
-   Admin Deposits (Updated with MR generation)
-------------------------------*/
-function renderAdminDeposits() {
-  const db = ensureDB();
-  setPage("Deposit Management", "Approve/Reject deposits, generate MR ID, check slip and transaction.");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
+        
         <div>
-          <h3>Pending Deposits</h3>
-          <p>Verify slip, approve deposit, generate MR ID and signature.</p>
-        </div>
-        <div class="panelTools">
-          <button class="btn" id="refreshDeposits">Refresh</button>
-          <button class="btn primary" id="addCashMRBtn">Add Cash MR</button>
+          <label style="display: block; margin-bottom: 8px; color: #6c757d;">Notes (Optional)</label>
+          <textarea id="depositNotes" rows="3" placeholder="Any additional notes..."
+                 style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); 
+                        border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; color: white; resize: vertical;"></textarea>
         </div>
       </div>
-
-      <div id="pendingDepositTable"></div>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Approved Deposits</h3>
-          <p>All confirmed deposits with MR ID.</p>
-        </div>
-      </div>
-      <div id="approvedDepositTable"></div>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  // Add event listeners
-  document.getElementById('refreshDeposits').addEventListener('click', renderAdminDeposits);
-  document.getElementById('addCashMRBtn').addEventListener('click', addCashMR);
-
-  const pending = db.deposits ? db.deposits.filter(d => d.status === "PENDING") : [];
-  const approved = db.deposits ? db.deposits.filter(d => d.status === "APPROVED") : [];
-
-  document.getElementById("pendingDepositTable").innerHTML = renderDepositTable(pending, true);
-  document.getElementById("approvedDepositTable").innerHTML = renderDepositTable(approved, false);
-}
-
-function addCashMR() {
-  const db = ensureDB();
-  const members = db.members ? db.members.filter(m => m.approved && m.status === "ACTIVE") : [];
-
-  const memberOptions = members.map(m => `<option value="${m.id}">${m.name} (${m.id})</option>`).join("");
-
-  const html = `
-    <div class="panel">
-      <h3>Add Cash Money Receipt</h3>
-      <p>Create MR for cash deposit directly.</p>
-
-      <div class="row row-3">
-        <div>
-          <label>Select Member *</label>
-          <select id="cash_member">${memberOptions}</select>
-        </div>
-        <div>
-          <label>Amount *</label>
-          <input id="cash_amount" type="number" placeholder="Enter amount" />
-        </div>
-        <div>
-          <label>Month *</label>
-          <input id="cash_month" value="${monthKey()}" />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Deposit Date</label>
-          <input id="cash_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
-        </div>
-        <div>
-          <label>Notes</label>
-          <input id="cash_note" placeholder="Optional note" />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="saveCashMRBtn">Save & Generate MR</button>
-      <button class="btn">Cancel</button>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Add Cash MR";
-  document.getElementById("viewerSub").innerText = "Create money receipt for cash deposit";
-  document.getElementById("viewerBody").innerHTML = html;
-
-  // Add event listener
-  document.getElementById('saveCashMRBtn').addEventListener('click', saveCashMR);
-
-  openModal("modalViewer");
-}
-
-function saveCashMR() {
-  const db = ensureDB();
-  const memberId = document.getElementById("cash_member").value;
-  const amount = Number(document.getElementById("cash_amount").value || 0);
-  const month = document.getElementById("cash_month").value.trim();
-  const date = document.getElementById("cash_date").value;
-  const note = document.getElementById("cash_note").value.trim();
-
-  if (!memberId || !amount || !month || !date) {
-    toast("Validation Error", "Please fill all required fields (*)");
-    return;
-  }
-
-  const member = db.members.find(m => m.id === memberId);
-  const depositId = genId("DP");
-  const mrId = genId("MR");
-
-  if (!db.deposits) db.deposits = [];
-
-  db.deposits.unshift({
-    id: depositId,
-    memberId,
-    month,
-    amount,
-    paymentMethod: "Cash",
-    fromBank: "",
-    toBank: "",
-    trxId: "CASH-" + Date.now(),
-    slip: "",
-    note,
-    status: "APPROVED",
-    mrId,
-    depositDate: date,
-    submittedAt: nowISO(),
-    approvedAt: nowISO(),
-    approvedBy: SESSION.user.id
-  });
-
-  saveDB(db);
-  logActivity("ADD_CASH_MR", `Cash MR added: ${mrId} for ${memberId}`);
-
-  // Send notification to member
-  const whatsappMsg = `Dear ${member.name},\nYour cash deposit has been approved.\nMR ID: ${mrId}\nAmount: ${fmtMoney(amount)}\nMonth: ${month}`;
-  const emailMsg = `Cash deposit approved. MR ID: ${mrId}, Amount: ${amount}`;
-
-  sendWhatsAppNotification(member.phone, whatsappMsg);
-  sendEmailNotification(member.email, "Cash Deposit Approved", emailMsg);
-
-  toast("Cash MR Created", `MR ${mrId} generated successfully.`);
-  closeModal("modalViewer");
-  renderAdminDeposits();
-}
-
-function renderDepositTable(list, isPending) {
-  const db = ensureDB();
-
-  const html = `
-    <table>
-      <thead>
-        <tr>
-          <th>Deposit ID</th>
-          <th>Member</th>
-          <th>Month</th>
-          <th>Amount</th>
-          <th>Payment Method</th>
-          <th>Status</th>
-          <th>MR ID</th>
-          ${isPending ? `<th>Action</th>` : `<th>Tools</th>`}
-        </tr>
-      </thead>
-      <tbody>
-        ${list.map(d => {
-    const m = db.members ? db.members.find(x => x.id === d.memberId) : null;
-    return `
-            <tr>
-              <td>${d.id}</td>
-              <td><b>${m ? m.name : "Unknown"}</b><div class="small">${d.memberId}</div></td>
-              <td>${d.month}</td>
-              <td>${fmtMoney(d.amount)}</td>
-              <td>${d.paymentMethod} ${d.fromBank ? `(${d.fromBank}→${d.toBank})` : ''}</td>
-              <td>
-                <span class="status ${d.status === "PENDING" ? "st-pending" : d.status === "APPROVED" ? "st-approved" : "st-rejected"}">
-                  ${d.status}
-                </span>
-              </td>
-              <td>${d.mrId || "-"}</td>
-              ${isPending ? `
-                <td>
-                  <button class="btn success approve-deposit" data-id="${d.id}">Approve</button>
-                  <button class="btn danger reject-deposit" data-id="${d.id}">Reject</button>
-                  <button class="btn view-slip" data-id="${d.id}">View Slip</button>
-                </td>
-              ` : `
-                <td>
-                  <button class="btn view-mr" data-id="${d.id}">View MR</button>
-                  <button class="btn print-mr" data-id="${d.id}">Print</button>
-                </td>
-              `}
-            </tr>
-          `;
-  }).join("") || `<tr><td colspan="${isPending ? 8 : 7}" class="small">No records found.</td></tr>`}
-      </tbody>
-    </table>
-  `;
-
-  // Add event listeners after rendering
-  setTimeout(() => {
-    if (isPending) {
-      document.querySelectorAll('.approve-deposit').forEach(btn => {
-        btn.addEventListener('click', () => approveDeposit(btn.getAttribute('data-id')));
-      });
-      document.querySelectorAll('.reject-deposit').forEach(btn => {
-        btn.addEventListener('click', () => rejectDeposit(btn.getAttribute('data-id')));
-      });
-      document.querySelectorAll('.view-slip').forEach(btn => {
-        btn.addEventListener('click', () => viewSlip(btn.getAttribute('data-id')));
-      });
-    } else {
-      document.querySelectorAll('.view-mr').forEach(btn => {
-        btn.addEventListener('click', () => viewMRReceipt(btn.getAttribute('data-id')));
-      });
-      document.querySelectorAll('.print-mr').forEach(btn => {
-        btn.addEventListener('click', () => printMR(btn.getAttribute('data-id')));
-      });
-    }
-  }, 100);
-
-  return html;
-}
-
-function viewSlip(depositId) {
-  const db = ensureDB();
-  const d = db.deposits.find(x => x.id === depositId);
-  if (!d) return;
-
-  const html = `
-    <div class="panel">
-      <h3>Deposit Slip Preview</h3>
-      <p class="small">Deposit ID: ${d.id} | Member: ${d.memberId}</p>
-      <div class="hr"></div>
-      ${d.slip ? `<img src="${d.slip}" style="width:100%;max-width:700px;border-radius:18px;border:1px solid var(--line);"/>` : '<p>No slip uploaded</p>'}
-    </div>
-  `;
-  document.getElementById("viewerTitle").innerText = "Deposit Slip";
-  document.getElementById("viewerSub").innerText = "Slip image preview";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
-}
-
-function approveDeposit(depositId) {
-  const db = ensureDB();
-  const d = db.deposits.find(x => x.id === depositId);
-  if (!d) return;
-
-  const mrId = genId("MR");
-  d.status = "APPROVED";
-  d.mrId = mrId;
-  d.approvedAt = nowISO();
-  d.approvedBy = SESSION.user.id;
-
-  saveDB(db);
-  logActivity("APPROVE_DEPOSIT", `Deposit approved: ${depositId} MR: ${mrId}`);
-
-  // Send notification to member
-  const member = db.members.find(m => m.id === d.memberId);
-  if (member) {
-    const whatsappMsg = `Dear ${member.name},\nYour deposit has been approved!\nMR ID: ${mrId}\nAmount: ${fmtMoney(d.amount)}\nMonth: ${d.month}\nThank you for your payment.`;
-    const emailMsg = `Deposit approved. MR ID: ${mrId}, Amount: ${d.amount}, Month: ${d.month}`;
-
-    sendWhatsAppNotification(member.phone, whatsappMsg);
-    sendEmailNotification(member.email, "Deposit Approved", emailMsg);
-  }
-
-  toast("Deposit Approved", `MR ID generated: ${mrId}`);
-  buildSidebar();
-  renderAdminDeposits();
-}
-
-function rejectDeposit(depositId) {
-  const db = ensureDB();
-  const d = db.deposits.find(x => x.id === depositId);
-  if (!d) return;
-
-  const note = prompt("Rejection note?");
-  if (note === null) return;
-
-  d.status = "REJECTED";
-  d.note = (d.note ? d.note + "\n" : "") + "Rejected: " + note;
-  d.approvedAt = nowISO();
-  d.approvedBy = SESSION.user.id;
-
-  saveDB(db);
-  logActivity("REJECT_DEPOSIT", `Deposit rejected: ${depositId}`);
-
-  // Send notification to member
-  const member = db.members.find(m => m.id === d.memberId);
-  if (member) {
-    const whatsappMsg = `Dear ${member.name},\nYour deposit for ${d.month} has been rejected.\nReason: ${note}\nPlease contact admin for details.`;
-    sendWhatsAppNotification(member.phone, whatsappMsg);
-  }
-
-  toast("Deposit Rejected", `Deposit ${depositId} rejected.`);
-  buildSidebar();
-  renderAdminDeposits();
-}
-
-function viewMRReceipt(depositId) {
-  const db = ensureDB();
-  const d = db.deposits.find(x => x.id === depositId);
-  const m = db.members.find(x => x.id === d.memberId);
-
-  if (!d || !d.mrId) {
-    toast("Error", "No MR ID found for this deposit");
-    return;
-  }
-
-  const receiptHTML = generateMRReceipt(d, m, db.meta);
-  document.getElementById("mrReceiptSub").innerText = `MR ID: ${d.mrId}`;
-  document.getElementById("mrReceiptBody").innerHTML = receiptHTML;
-  openModal("modalMRReceipt");
-}
-
-function printMR(depositId) {
-  const db = ensureDB();
-  const d = db.deposits.find(x => x.id === depositId);
-  const m = db.members.find(x => x.id === d.memberId);
-
-  if (!d || !d.mrId) {
-    toast("Error", "No MR ID found for this deposit");
-    return;
-  }
-
-  const receiptHTML = generateMRReceipt(d, m, db.meta);
-  const printWindow = window.open('', '_blank');
-  printWindow.document.write(`
-    <html>
-      <head>
-        <title>Money Receipt - ${d.mrId}</title>
-        <style>
-          body { font-family: Arial, sans-serif; margin: 20px; }
-          .receipt { width: 800px; margin: 0 auto; border: 2px solid #000; padding: 20px; }
-          .header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-          .row { display: flex; justify-content: space-between; margin-bottom: 8px; }
-          .details { margin-bottom: 20px; }
-          .signature { margin-top: 40px; display: flex; justify-content: space-between; }
-          .signature div { text-align: center; }
-          .signature .line { width: 200px; height: 1px; background: #000; margin: 5px auto; }
-          @media print { body { margin: 0; } }
-        </style>
-      </head>
-      <body>
-        ${receiptHTML}
-        <script>
-          window.onload = function() {
-            window.print();
-            setTimeout(function() { window.close(); }, 1000);
-          };
-        </script>
-      </body>
-    </html>
-  `);
-  printWindow.document.close();
-}
-
-// Fixed Print Function
-function printReceipt() {
-  const receiptContent = document.getElementById("mrReceiptBody").innerHTML;
-
-  // Create a new window for printing
-  const printWindow = window.open('', '_blank');
-
-  printWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <title>Money Receipt - Print</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          margin: 20px;
-          padding: 20px;
-        }
-        .receipt {
-          width: 800px;
-          margin: 0 auto;
-          border: 2px solid #000;
-          padding: 30px;
-          background: white;
-          color: black;
-        }
-        .header {
-          text-align: center;
-          border-bottom: 2px solid #333;
-          padding-bottom: 15px;
-          margin-bottom: 20px;
-        }
-        .row {
-          display: flex;
-          justify-content: space-between;
-          margin-bottom: 8px;
-        }
-        .details {
-          margin-bottom: 20px;
-        }
-        .signature {
-          margin-top: 40px;
-          display: flex;
-          justify-content: space-between;
-        }
-        .signature div {
-          text-align: center;
-        }
-        .signature .line {
-          width: 200px;
-          height: 1px;
-          background: #333;
-          margin: 5px auto;
-        }
-        @media print {
-          body { margin: 0; padding: 0; }
-          button { display: none !important; }
-        }
-      </style>
-    </head>
-    <body>
-      ${receiptContent}
-      <div style="text-align:center; margin-top:20px;">
-        <button onclick="window.print()" style="padding:10px 20px; background:#007bff; color:white; border:none; border-radius:5px; cursor:pointer;">
-          Print Now
+      
+      <div style="margin-top: 30px; display: flex; gap: 15px; justify-content: flex-end;">
+        <button class="btn-primary" onclick="go('member_dashboard')" 
+                style="background: #6c757d; padding: 12px 24px;">
+          Cancel
         </button>
-        <button onclick="window.close()" style="padding:10px 20px; background:#dc3545; color:white; border:none; border-radius:5px; cursor:pointer; margin-left:10px;">
-          Close
+        <button class="btn-primary" onclick="submitMemberDeposit()" style="padding: 12px 24px;">
+          Submit Deposit
         </button>
       </div>
-      <script>
-        // Auto print after 500ms
-        setTimeout(function() {
-          window.print();
-        }, 500);
-
-        // Close window after printing (optional)
-        window.onafterprint = function() {
-          setTimeout(function() {
-            window.close();
-          }, 1000);
-        };
-      </script>
-    </body>
-    </html>
-  `);
-
-  printWindow.document.close();
-  printWindow.focus();
-}
-
-function downloadReceipt() {
-  // Simple download as HTML
-  const content = document.getElementById("mrReceiptBody").innerHTML;
-  const blob = new Blob([`<html><head><title>Money Receipt</title></head><body>${content}</body></html>`], { type: 'text/html' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'money-receipt.html';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-function generateMRReceipt(deposit, member, meta) {
-  const date = new Date(deposit.approvedAt || deposit.submittedAt);
-  const formattedDate = date.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
+    </div>
+  `;
+  
+  // Add event listener for payment method change
+  document.getElementById('depositMethod').addEventListener('change', function() {
+    const bankFields = document.getElementById('bankFields');
+    bankFields.style.display = this.value === 'BANK' ? 'block' : 'none';
   });
-
-  return `
-    <div class="receipt">
-      <div class="header">
-        <h2>${meta.companyName || "IMS Investment Ltd."}</h2>
-        <p>${meta.companyAddress || "Dhaka, Bangladesh"}</p>
-        <p>Phone: ${meta.companyPhone || "+8801234567890"} | Email: ${meta.companyEmail || "info@imsinvestment.com"}</p>
-      </div>
-
-      <h2 style="text-align:center;margin-bottom:30px;">MONEY RECEIPT</h2>
-
-      <div class="details">
-        <div class="row">
-          <div><strong>MR No:</strong> ${deposit.mrId}</div>
-          <div><strong>Date:</strong> ${formattedDate}</div>
-        </div>
-
-        <div class="row">
-          <div><strong>Received from:</strong> ${member ? member.name : "N/A"}</div>
-          <div><strong>Member ID:</strong> ${deposit.memberId}</div>
-        </div>
-
-        <div class="row">
-          <div><strong>Father's Name:</strong> ${member ? (member.fatherName || "N/A") : "N/A"}</div>
-          <div><strong>Mother's Name:</strong> ${member ? (member.motherName || "N/A") : "N/A"}</div>
-        </div>
-
-        <div class="row">
-          <div><strong>Address:</strong> ${member ? (member.address || "N/A") : "N/A"}</div>
-          <div><strong>Phone:</strong> ${member ? member.phone : "N/A"}</div>
-        </div>
-
-        <div class="row">
-          <div><strong>For the month of:</strong> ${deposit.month}</div>
-          <div><strong>Payment Method:</strong> ${deposit.paymentMethod}</div>
-        </div>
-
-        ${deposit.fromBank ? `
-        <div class="row">
-          <div><strong>Bank Transfer:</strong> ${deposit.fromBank} to ${deposit.toBank}</div>
-          <div><strong>Transaction ID:</strong> ${deposit.trxId}</div>
-        </div>
-        ` : `
-        <div class="row">
-          <div><strong>Transaction ID:</strong> ${deposit.trxId}</div>
-          <div></div>
-        </div>
-        `}
-
-        <div style="margin-top:30px;text-align:center;">
-          <h3 style="font-size:24px;margin:0;">Amount in Words:</h3>
-          <p style="font-size:18px;margin:10px 0 30px 0;">
-            ${numberToWords(deposit.amount)} Taka Only
-          </p>
-        </div>
-
-        <div style="text-align:center;margin:40px 0;">
-          <h1 style="font-size:48px;margin:0;color:#2c3e50;">${fmtMoney(deposit.amount)}</h1>
-          <p style="font-size:18px;margin-top:10px;">(Paid in full)</p>
-        </div>
-      </div>
-
-      <div class="signature">
-        <div>
-          <p>_________________________</p>
-          <p>Receiver's Signature</p>
-          <p>Date: ${new Date().toLocaleDateString()}</p>
-        </div>
-        <div>
-          <p>_________________________</p>
-          <p>Authorized Signature</p>
-          <p>${meta.companyName || "IMS Investment Ltd."}</p>
-        </div>
-      </div>
-
-      <div style="margin-top:40px;font-size:12px;text-align:center;color:#666;">
-        <p>*** This is a computer generated receipt. No signature required. ***</p>
-        <p>Generated on: ${new Date().toLocaleString()}</p>
-      </div>
-    </div>
-  `;
 }
 
-function numberToWords(num) {
-  // Simple number to words conversion for receipt
-  const ones = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
-  const teens = ['Ten', 'Eleven', 'Twelve', 'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen', 'Eighteen', 'Nineteen'];
-  const tens = ['', '', 'Twenty', 'Thirty', 'Forty', 'Fifty', 'Sixty', 'Seventy', 'Eighty', 'Ninety'];
-
-  if (num === 0) return 'Zero';
-
-  let words = '';
-
-  if (num >= 10000000) {
-    words += numberToWords(Math.floor(num / 10000000)) + ' Crore ';
-    num %= 10000000;
+async function submitMemberDeposit() {
+  const month = document.getElementById('depositMonth').value;
+  const amount = document.getElementById('depositAmount').value;
+  const method = document.getElementById('depositMethod').value;
+  const trxId = document.getElementById('depositTrx').value.trim();
+  const date = document.getElementById('depositDate').value;
+  const notes = document.getElementById('depositNotes').value.trim();
+  const bank = method === 'BANK' ? document.getElementById('depositBank').value : '';
+  
+  if (!month || !amount || !method || !trxId || !date) {
+    showToast('Please fill all required fields', 'error');
+    return;
   }
-
-  if (num >= 100000) {
-    words += numberToWords(Math.floor(num / 100000)) + ' Lakh ';
-    num %= 100000;
-  }
-
-  if (num >= 1000) {
-    words += numberToWords(Math.floor(num / 1000)) + ' Thousand ';
-    num %= 1000;
-  }
-
-  if (num >= 100) {
-    words += numberToWords(Math.floor(num / 100)) + ' Hundred ';
-    num %= 100;
-  }
-
-  if (num > 0) {
-    if (words !== '') words += 'and ';
-
-    if (num < 10) {
-      words += ones[num];
-    } else if (num < 20) {
-      words += teens[num - 10];
-    } else {
-      words += tens[Math.floor(num / 10)];
-      if (num % 10 > 0) {
-        words += ' ' + ones[num % 10];
-      }
-    }
-  }
-
-  return words.trim();
-}
-
-/* -----------------------------
-   Member Dashboard (Updated)
-------------------------------*/
-function renderMemberDashboard() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-  setPage("Member Dashboard", "Your deposit status, profit, shares and notices.");
-
-  const approvedDeposits = db.deposits ? db.deposits.filter(d => d.memberId === m.id && d.status === "APPROVED") : [];
-  const totalDeposit = approvedDeposits.reduce((a, b) => a + Number(b.amount || 0), 0);
-
-  const currentMonth = monthKey();
-  const thisMonthApproved = db.deposits ? db.deposits.find(d => d.memberId === m.id && d.month === currentMonth && d.status === "APPROVED") : null;
-  const thisMonthPending = db.deposits ? db.deposits.find(d => d.memberId === m.id && d.month === currentMonth && d.status === "PENDING") : null;
-
-  const required = m.shares * db.meta.monthlyShareAmount;
-  const due = thisMonthApproved ? 0 : required;
-
-  const profitEntries = db.profitDistributions || [];
-  let myProfit = 0;
-  profitEntries.forEach(p => {
-    myProfit += (Number(p.profitPerShare) * Number(m.shares));
-  });
-
-  const html = `
-    <div class="gridCards">
-      <div class="card">
-        <div class="tag">Shares</div>
-        <div class="title">My Total Shares</div>
-        <div class="value">${m.shares}</div>
-        <div class="sub">Share Amount: ${fmtMoney(db.meta.monthlyShareAmount)} / share</div>
-      </div>
-
-      <div class="card">
-        <div class="tag">Deposit</div>
-        <div class="title">Total Approved Deposit</div>
-        <div class="value">${fmtMoney(totalDeposit)}</div>
-        <div class="sub">All time deposit record</div>
-      </div>
-
-      <div class="card">
-        <div class="tag">Due</div>
-        <div class="title">This Month Due</div>
-        <div class="value">${fmtMoney(due)}</div>
-        <div class="sub">${thisMonthPending ? "Pending submission exists" : "No approved deposit yet"}</div>
-      </div>
-
-      <div class="card">
-        <div class="tag">Profit</div>
-        <div class="title">Total Profit Earned</div>
-        <div class="value">${fmtMoney(myProfit)}</div>
-        <div class="sub">Based on profit distribution history</div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Current Month Deposit Status</h3>
-          <p>Month: ${currentMonth}</p>
-        </div>
-        <div class="panelTools">
-          <button class="btn primary" onclick="go('member_deposit')">Submit Deposit</button>
-        </div>
-      </div>
-
-      <table>
-        <tr><th>Status</th><th>Details</th></tr>
-        <tr>
-          <td>
-            ${thisMonthApproved ? `<span class="status st-approved">APPROVED</span>` :
-      thisMonthPending ? `<span class="status st-pending">PENDING</span>` :
-        `<span class="status st-rejected">NOT SUBMITTED</span>`}
-          </td>
-          <td>
-            ${thisMonthApproved ? `Approved MR ID: <b>${thisMonthApproved.mrId}</b>` :
-      thisMonthPending ? `Deposit submitted. Waiting admin approval.` :
-        `Please submit deposit slip and transaction ID.`}
-          </td>
-        </tr>
-      </table>
-    </div>
-
-    <!-- Company Vision & Mission Section -->
-    <div class="companyMission">
-      <h3>Our Vision & Mission</h3>
-      <p>To become the leading investment management company in the region, providing innovative financial solutions and creating sustainable value for our members...</p>
-      <button class="btn" onclick="openModal('modalCompanyInfo')" style="margin-top:10px;">Read More</button>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-}
-
-/* -----------------------------
-   Member Profile (Updated with admin permission)
-------------------------------*/
-function renderMemberProfile() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-
-  setPage("My Profile", "View and update your profile information.");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Profile Information</h3>
-          <p>Update your phone, email, address and photo (if admin allows).</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Profile Photo</label>
-          ${m.photo ? `<img src="${m.photo}" style="width:120px;height:120px;border-radius:18px;border:1px solid var(--line);object-fit:cover;">` : `<div class="small">No Photo</div>`}
-          <input id="up_photo" type="file" accept="image/*" style="margin-top:8px;" />
-        </div>
-        <div>
-          <label>Member ID</label>
-          <input value="${m.id}" disabled />
-        </div>
-        <div>
-          <label>Full Name</label>
-          <input value="${m.name}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Phone</label>
-          <input id="up_phone" value="${m.phone}" />
-        </div>
-        <div>
-          <label>Email</label>
-          <input id="up_email" value="${m.email}" />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Address</label>
-          <input id="up_address" value="${m.address}" />
-        </div>
-        <div>
-          <label>Shares</label>
-          <input value="${m.shares}" disabled />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row row-2">
-        <div>
-          <label>Change Password</label>
-          <input id="up_pass" placeholder="New password (optional)" />
-        </div>
-        <div>
-          <label>Confirm Password</label>
-          <input id="up_pass2" placeholder="Confirm password" />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <button class="btn success" id="updateProfileBtn">Update Profile</button>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>NID & Nominee Info (Read Only)</h3>
-          <p>For security, only admin can update these fields.</p>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>NID No</label>
-          <input value="${m.nidNo}" disabled />
-        </div>
-        <div>
-          <label>Nominee Name</label>
-          <input value="${m.nomineeName}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Nominee Relation</label>
-          <input value="${m.nomineeRelation}" disabled />
-        </div>
-        <div>
-          <label>Nominee Phone</label>
-          <input value="${m.nomineePhone}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>NID Front</label>
-          ${m.nidFront ? `<img src="${m.nidFront}" style="width:100%;max-width:340px;border-radius:18px;border:1px solid var(--line);">` : `<div class="small">No file</div>`}
-        </div>
-        <div>
-          <label>NID Back</label>
-          ${m.nidBack ? `<img src="${m.nidBack}" style="width:100%;max-width:340px;border-radius:18px;border:1px solid var(--line);">` : `<div class="small">No file</div>`}
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  // Add event listener
-  document.getElementById('updateProfileBtn').addEventListener('click', memberUpdateProfile);
-}
-
-async function memberUpdateProfile() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-  if (!m) return;
-
-  const phone = document.getElementById("up_phone").value.trim();
-  const email = document.getElementById("up_email").value.trim();
-  const address = document.getElementById("up_address").value.trim();
-
-  const pass = document.getElementById("up_pass").value.trim();
-  const pass2 = document.getElementById("up_pass2").value.trim();
-
-  if (pass || pass2) {
-    if (pass !== pass2) {
-      toast("Password Error", "Password confirmation mismatch.");
+  
+  // Check for duplicate deposit
+  try {
+    const depositsSnapshot = await db.get('deposits');
+    const deposits = depositsSnapshot.exists() ? Object.values(depositsSnapshot.val()) : [];
+    const existingDeposit = deposits.find(d => 
+      d.memberId === SESSION.user.id && 
+      d.month === month && 
+      (d.status === 'PENDING' || d.status === 'APPROVED')
+    );
+    
+    if (existingDeposit) {
+      showToast(`You already have a ${existingDeposit.status.toLowerCase()} deposit for ${month}`, 'error');
       return;
     }
-    m.pass = pass;
+  } catch (error) {
+    console.error('Error checking duplicate deposit:', error);
   }
-
-  const photoFile = document.getElementById("up_photo").files[0];
-  if (photoFile) {
-    m.photo = await fileToBase64(photoFile);
+  
+  // Show confirmation
+  const confirmMessage = `
+    Please confirm your deposit details:
+    
+    Month: ${month}
+    Amount: ${fmtMoney(amount)}
+    Method: ${method}
+    ${bank ? `Bank: ${bank}\n` : ''}
+    Transaction ID: ${trxId}
+    Date: ${date}
+    
+    After submission, your deposit will be pending until admin approval.
+  `;
+  
+  if (confirm(confirmMessage)) {
+    submitDeposit(month, amount, method, trxId, date, notes, bank);
   }
-
-  m.phone = phone;
-  m.email = email;
-  m.address = address;
-  m.updatedAt = nowISO();
-
-  saveDB(db);
-  logActivity("MEMBER_PROFILE_UPDATE", `Member updated profile ${m.id}`);
-  toast("Profile Updated", "Your profile updated successfully.");
-  renderMemberProfile();
 }
 
-/* -----------------------------
-   Member Deposit History
-------------------------------*/
-function renderMemberDepositHistory() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-  setPage("Deposit History", "Your full deposit history with status and MR ID.");
-
-  const list = db.deposits ? db.deposits.filter(d => d.memberId === m.id) : [];
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>My Deposits</h3>
-          <p>Pending / Approved / Rejected history.</p>
+async function submitDeposit(month, amount, method, trxId, date, notes, bank) {
+  try {
+    // Generate deposit ID
+    const depositId = `DP-${Date.now()}`;
+    
+    // Create deposit object
+    const depositData = {
+      id: depositId,
+      memberId: SESSION.user.id,
+      memberName: SESSION.user.name,
+      month,
+      amount: parseFloat(amount),
+      paymentMethod: method,
+      fromBank: bank,
+      toBank: bank,
+      trxId,
+      note: notes,
+      status: "PENDING",
+      mrId: "",
+      depositDate: date,
+      submittedAt: nowISO(),
+      approvedAt: "",
+      approvedBy: ""
+    };
+    
+    // Save to Firebase
+    await db.set(`deposits/${depositId}`, depositData);
+    
+    // Log activity
+    await logActivity('SUBMIT_DEPOSIT', `Member ${SESSION.user.name} submitted deposit for ${month}`);
+    
+    // Send notification to admins
+    const adminsSnapshot = await db.get('admins');
+    if (adminsSnapshot.exists()) {
+      const admins = Object.values(adminsSnapshot.val()).filter(a => a.active);
+      admins.forEach(admin => {
+        // In real app, send WhatsApp notification here
+        console.log('Notification to admin:', admin.name);
+      });
+    }
+    
+    // Show success
+    const mainContent = document.getElementById('mainContent');
+    mainContent.innerHTML = `
+      <div class="glass" style="padding: 40px; border-radius: 15px; text-align: center;">
+        <div style="font-size: 72px; margin-bottom: 20px;">✅</div>
+        <h2>Deposit Submitted Successfully!</h2>
+        <p style="color: #6c757d; margin-bottom: 30px;">
+          Your deposit has been submitted for admin approval.
+        </p>
+        
+        <div style="background: rgba(16, 185, 129, 0.1); padding: 20px; border-radius: 10px; 
+             max-width: 400px; margin: 0 auto 30px; text-align: left;">
+          <div style="display: grid; gap: 10px;">
+            <div style="display: flex; justify-content: space-between;">
+              <span>Deposit ID:</span>
+              <strong>${depositId}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Month:</span>
+              <strong>${month}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Amount:</span>
+              <strong>${fmtMoney(amount)}</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Status:</span>
+              <strong style="color: #f59e0b;">PENDING</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between;">
+              <span>Submitted:</span>
+              <strong>${new Date().toLocaleDateString()}</strong>
+            </div>
+          </div>
+        </div>
+        
+        <div style="display: flex; gap: 15px; justify-content: center;">
+          <button class="btn-primary" onclick="go('member_deposit_history')" 
+                  style="background: #6c757d; padding: 12px 24px;">
+            View History
+          </button>
+          <button class="btn-primary" onclick="go('member_dashboard')" style="padding: 12px 24px;">
+            Dashboard
+          </button>
         </div>
       </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Deposit ID</th>
-            <th>Month</th>
-            <th>Amount</th>
-            <th>Payment Method</th>
-            <th>Status</th>
-            <th>MR ID</th>
-            <th>Tools</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${list.map(d => `
-            <tr>
-              <td>${d.id}</td>
-              <td>${d.month}</td>
-              <td>${fmtMoney(d.amount)}</td>
-              <td>${d.paymentMethod}</td>
-              <td><span class="status ${d.status === "PENDING" ? "st-pending" : d.status === "APPROVED" ? "st-approved" : "st-rejected"}">
-                ${d.status}
-              </span></td>
-              <td>${d.mrId || "-"}</td>
-              <td>
-                ${d.status === "APPROVED" && d.mrId ? `
-                  <button class="btn view-mr-receipt" data-id="${d.id}">View MR</button>
-                ` : `
-                  <button class="btn view-deposit-slip" data-id="${d.id}">View Slip</button>
-                `}
-              </td>
-            </tr>
-          `).join("") || `<tr><td colspan="7" class="small">No deposits found.</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  // Add event listeners to dynamic buttons
-  setTimeout(() => {
-    document.querySelectorAll('.view-mr-receipt').forEach(btn => {
-      btn.addEventListener('click', () => viewMRReceipt(btn.getAttribute('data-id')));
-    });
-    document.querySelectorAll('.view-deposit-slip').forEach(btn => {
-      btn.addEventListener('click', () => viewSlip(btn.getAttribute('data-id')));
-    });
-  }, 100);
+    `;
+    
+  } catch (error) {
+    console.error('Error submitting deposit:', error);
+    showToast('Failed to submit deposit', 'error');
+  }
 }
 
 /* -----------------------------
-   System Tools
+   Member Notices
 ------------------------------*/
+async function renderMemberNotices() {
+  const mainContent = document.getElementById('mainContent');
+  mainContent.innerHTML = `
+    <div class="glass" style="padding: 30px; border-radius: 15px;">
+      <div style="text-align: center; margin-bottom: 30px;">
+        <div style="font-size: 48px; margin-bottom: 15px;">📢</div>
+        <h2>Notices & Announcements</h2>
+        <p style="color: #6c757d;">Stay updated with latest company announcements</p>
+      </div>
+      
+      <div id="noticesList">
+        <p>Loading notices...</p>
+      </div>
+    </div>
+  `;
+  
+  loadMemberNotices();
+}
+
+async function loadMemberNotices() {
+  try {
+    const dbData = await getDB();
+    const notices = dbData.notices ? Object.values(dbData.notices) : [];
+    
+    const noticesList = document.getElementById('noticesList');
+    
+    if (notices.length === 0) {
+      noticesList.innerHTML = `
+        <div style="text-align: center; padding: 40px;">
+          <div style="font-size: 48px; margin-bottom: 20px;">📭</div>
+          <h3>No Notices Available</h3>
+          <p style="color: #6c757d;">Check back later for updates</p>
+        </div>
+      `;
+      return;
+    }
+    
+    // Sort by date (newest first)
+    notices.sort((a, b) => new Date(b.date || b.createdAt) - new Date(a.date || a.createdAt));
+    
+    noticesList.innerHTML = notices.map(notice => `
+      <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 10px; 
+           margin-bottom: 20px; border-left: 4px solid #4361ee;">
+        <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px;">
+          <h4 style="margin: 0;">${notice.title || 'Notice'}</h4>
+          <small style="color: #6c757d;">${new Date(notice.date || notice.createdAt).toLocaleDateString()}</small>
+        </div>
+        <p style="color: #e2e8f0; margin-bottom: 15px;">${notice.message || ''}</p>
+        ${notice.attachment ? `
+          <div style="margin-top: 10px;">
+            <a href="${notice.attachment}" target="_blank" 
+               style="color: #4cc9f0; text-decoration: none;">
+              <i class="fas fa-paperclip"></i> View Attachment
+            </a>
+          </div>
+        ` : ''}
+      </div>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Error loading notices:', error);
+    document.getElementById('noticesList').innerHTML = `
+      <div style="text-align: center; padding: 40px; color: #ef4444;">
+        <i class="fas fa-exclamation-circle" style="font-size: 48px; margin-bottom: 20px;"></i>
+        <p>Error loading notices. Please try again.</p>
+      </div>
+    `;
+  }
+}
+
+/* -----------------------------
+   Helper Functions
+------------------------------*/
+async function logActivity(action, details) {
+  try {
+    const logId = `LOG-${Date.now()}`;
+    await db.push('activityLogs', {
+      id: logId,
+      action,
+      details,
+      byId: SESSION.user?.id || 'SYSTEM',
+      byRole: SESSION.user?.role || SESSION.user?.type || 'SYSTEM',
+      at: nowISO()
+    });
+  } catch (error) {
+    console.error('Error logging activity:', error);
+  }
+}
+
+// Export functions for modals
 function exportJSON() {
-  const db = ensureDB();
-  const dataStr = JSON.stringify(db, null, 2);
-
-  const blob = new Blob([dataStr], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "IMS_ERP_V5_BACKUP.json";
-  a.click();
-
-  toast("Export Done", "Backup JSON file downloaded.");
+  showToast('Export feature coming soon!', 'info');
 }
 
 function importJSONPrompt() {
-  const txt = prompt("Paste JSON Backup here:");
-  if (!txt) return;
+  showToast('Import feature coming soon!', 'info');
+}
 
-  try {
-    const obj = JSON.parse(txt);
-    localStorage.setItem(LS_KEY, JSON.stringify(obj));
-    toast("Import Success", "Backup restored successfully.");
-    logActivity("IMPORT_BACKUP", "System imported JSON backup");
-    closeModal("modalSystemTools");
-    startApp();
-  } catch (e) {
-    toast("Import Failed", "Invalid JSON format.");
+async function resetDemo() {
+  if (confirm('Reset demo database? All current data will be lost.')) {
+    try {
+      await seedDB();
+      showToast('Demo database reset successfully', 'success');
+      if (SESSION.user) {
+        startApp();
+      }
+    } catch (error) {
+      console.error('Error resetting demo:', error);
+      showToast('Failed to reset demo', 'error');
+    }
   }
 }
 
-function resetDemo() {
-  if (!confirm("Reset demo database? All current data will be lost.")) return;
-  seedDB();
-  toast("Reset Done", "Demo database loaded.");
-  startApp();
-}
-
-function wipeAll() {
-  if (!confirm("⚠️ WARNING: Delete all ERP data permanently?")) return;
-  localStorage.removeItem(LS_KEY);
-  toast("Deleted", "All data wiped. Reloading demo...");
-  seedDB();
-  startApp();
-}
-
-/* -----------------------------
-   Remaining functions (simplified versions)
-------------------------------*/
-// Note: Due to length constraints, I've simplified the remaining functions
-// In the full version, you would need to implement all the remaining pages
-/* -----------------------------
-   NEW FUNCTIONS FOR ALL TABS (COMPLETE IMPLEMENTATION)
-------------------------------*/
-
-/* -----------------------------
-   Investments Management
-------------------------------*/
-function renderAdminInvestments() {
-  const db = ensureDB();
-  setPage("Investments Management", "Create and manage investment projects");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Add New Investment</h3>
-          <p>Create investment project with details</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Investment Name *</label>
-          <input id="inv_name" placeholder="Investment Name" />
-        </div>
-        <div>
-          <label>Investment ID (Auto)</label>
-          <input id="inv_id" value="${genId("INV")}" disabled />
-        </div>
-        <div>
-          <label>Amount *</label>
-          <input id="inv_amount" type="number" placeholder="Enter amount" />
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Start Date</label>
-          <input id="inv_start" type="date" value="${new Date().toISOString().split('T')[0]}" />
-        </div>
-        <div>
-          <label>End Date</label>
-          <input id="inv_end" type="date" />
-        </div>
-        <div>
-          <label>Status</label>
-          <select id="inv_status">
-            <option value="PLANNING">Planning</option>
-            <option value="ACTIVE">Active</option>
-            <option value="COMPLETED">Completed</option>
-            <option value="HOLD">Hold</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Description</label>
-          <textarea id="inv_desc" placeholder="Investment description..."></textarea>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Responsible Person</label>
-          <input id="inv_responsible" placeholder="Person name" />
-        </div>
-        <div>
-          <label>Expected Return (%)</label>
-          <input id="inv_return" type="number" placeholder="Expected return percentage" />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="addInvestmentBtn">Add Investment</button>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>All Investments</h3>
-          <p>Total Investments: ${db.investments ? db.investments.length : 0}</p>
-        </div>
-        <div class="panelTools">
-          <input id="investmentSearch" placeholder="Search investment..." />
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Name</th>
-            <th>Amount</th>
-            <th>Start Date</th>
-            <th>Status</th>
-            <th>Expected Return</th>
-            <th>Tools</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.investments && db.investments.length > 0 ? db.investments.map(inv => `
-            <tr>
-              <td>${inv.id}</td>
-              <td><b>${inv.name}</b><div class="small">${inv.description || ''}</div></td>
-              <td>${fmtMoney(inv.amount)}</td>
-              <td>${inv.startDate || 'N/A'}</td>
-              <td><span class="status ${inv.status === 'ACTIVE' ? 'st-approved' : inv.status === 'COMPLETED' ? 'st-success' : 'st-pending'}">${inv.status}</span></td>
-              <td>${inv.expectedReturn || 0}%</td>
-              <td>
-                <button class="btn view-investment" data-id="${inv.id}">View</button>
-                <button class="btn warn edit-investment" data-id="${inv.id}">Edit</button>
-              </td>
-            </tr>
-          `).join('') : `<tr><td colspan="7" class="small">No investments found</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  // Add event listeners
-  document.getElementById('addInvestmentBtn').addEventListener('click', addInvestment);
-  document.getElementById('investmentSearch').addEventListener('input', filterInvestments);
-
-  // Add listeners to view/edit buttons
-  setTimeout(() => {
-    document.querySelectorAll('.view-investment').forEach(btn => {
-      btn.addEventListener('click', () => viewInvestment(btn.getAttribute('data-id')));
-    });
-    document.querySelectorAll('.edit-investment').forEach(btn => {
-      btn.addEventListener('click', () => editInvestment(btn.getAttribute('data-id')));
-    });
-  }, 100);
-}
-
-function addInvestment() {
-  const db = ensureDB();
-
-  const name = document.getElementById("inv_name").value.trim();
-  const amount = Number(document.getElementById("inv_amount").value || 0);
-  const startDate = document.getElementById("inv_start").value;
-  const endDate = document.getElementById("inv_end").value;
-  const status = document.getElementById("inv_status").value;
-  const description = document.getElementById("inv_desc").value.trim();
-  const responsible = document.getElementById("inv_responsible").value.trim();
-  const expectedReturn = Number(document.getElementById("inv_return").value || 0);
-
-  if (!name || amount <= 0) {
-    toast("Validation Error", "Please enter investment name and valid amount");
-    return;
+async function wipeAll() {
+  if (confirm('⚠️ WARNING: Delete all ERP data permanently?')) {
+    try {
+      await db.remove('/');
+      await seedDB();
+      showToast('Database reset to demo', 'success');
+      if (SESSION.user) {
+        startApp();
+      }
+    } catch (error) {
+      console.error('Error wiping data:', error);
+      showToast('Failed to reset database', 'error');
+    }
   }
-
-  const id = genId("INV");
-  if (!db.investments) db.investments = [];
-
-  db.investments.unshift({
-    id,
-    name,
-    amount,
-    startDate,
-    endDate,
-    status,
-    description,
-    responsible,
-    expectedReturn,
-    createdAt: nowISO(),
-    updatedAt: nowISO()
-  });
-
-  saveDB(db);
-  logActivity("ADD_INVESTMENT", `Added investment: ${name} (${id})`);
-  toast("Investment Added", `${name} added successfully`);
-
-  renderAdminInvestments();
 }
 
-function filterInvestments() {
-  const search = document.getElementById("investmentSearch").value.toLowerCase();
-  const rows = document.querySelectorAll("table tbody tr");
-
-  rows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    row.style.display = text.includes(search) ? "" : "none";
-  });
-}
-
-function viewInvestment(id) {
-  const db = ensureDB();
-  const inv = db.investments.find(x => x.id === id);
-  if (!inv) return;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>${inv.name} (${inv.id})</h3>
-          <p>Investment Details</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Amount</label>
-          <input value="${fmtMoney(inv.amount)}" disabled />
-        </div>
-        <div>
-          <label>Status</label>
-          <input value="${inv.status}" disabled />
-        </div>
-        <div>
-          <label>Expected Return</label>
-          <input value="${inv.expectedReturn || 0}%" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Start Date</label>
-          <input value="${inv.startDate || 'N/A'}" disabled />
-        </div>
-        <div>
-          <label>End Date</label>
-          <input value="${inv.endDate || 'N/A'}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Description</label>
-          <textarea disabled>${inv.description || ''}</textarea>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Responsible Person</label>
-          <input value="${inv.responsible || 'N/A'}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Created At</label>
-          <input value="${new Date(inv.createdAt).toLocaleString()}" disabled />
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Investment Details";
-  document.getElementById("viewerSub").innerText = "View investment information";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
-}
-
-function editInvestment(id) {
-  const db = ensureDB();
-  const inv = db.investments.find(x => x.id === id);
-  if (!inv) return;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Edit Investment</h3>
-          <p>Update investment details</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Investment Name *</label>
-          <input id="edit_inv_name" value="${inv.name}" />
-        </div>
-        <div>
-          <label>Amount *</label>
-          <input id="edit_inv_amount" type="number" value="${inv.amount}" />
-        </div>
-        <div>
-          <label>Status</label>
-          <select id="edit_inv_status">
-            <option value="PLANNING" ${inv.status === 'PLANNING' ? 'selected' : ''}>Planning</option>
-            <option value="ACTIVE" ${inv.status === 'ACTIVE' ? 'selected' : ''}>Active</option>
-            <option value="COMPLETED" ${inv.status === 'COMPLETED' ? 'selected' : ''}>Completed</option>
-            <option value="HOLD" ${inv.status === 'HOLD' ? 'selected' : ''}>Hold</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Start Date</label>
-          <input id="edit_inv_start" type="date" value="${inv.startDate || ''}" />
-        </div>
-        <div>
-          <label>End Date</label>
-          <input id="edit_inv_end" type="date" value="${inv.endDate || ''}" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Description</label>
-          <textarea id="edit_inv_desc">${inv.description || ''}</textarea>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Responsible Person</label>
-          <input id="edit_inv_responsible" value="${inv.responsible || ''}" />
-        </div>
-        <div>
-          <label>Expected Return (%)</label>
-          <input id="edit_inv_return" type="number" value="${inv.expectedReturn || 0}" />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="updateInvestmentBtn">Update Investment</button>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Edit Investment";
-  document.getElementById("viewerSub").innerText = "Update investment details";
-  document.getElementById("viewerBody").innerHTML = html;
-
-  document.getElementById('updateInvestmentBtn').addEventListener('click', () => updateInvestment(id));
-
-  openModal("modalViewer");
-}
-
-function updateInvestment(id) {
-  const db = ensureDB();
-  const inv = db.investments.find(x => x.id === id);
-  if (!inv) return;
-
-  inv.name = document.getElementById("edit_inv_name").value.trim();
-  inv.amount = Number(document.getElementById("edit_inv_amount").value || 0);
-  inv.status = document.getElementById("edit_inv_status").value;
-  inv.startDate = document.getElementById("edit_inv_start").value;
-  inv.endDate = document.getElementById("edit_inv_end").value;
-  inv.description = document.getElementById("edit_inv_desc").value.trim();
-  inv.responsible = document.getElementById("edit_inv_responsible").value.trim();
-  inv.expectedReturn = Number(document.getElementById("edit_inv_return").value || 0);
-  inv.updatedAt = nowISO();
-
-  saveDB(db);
-  logActivity("UPDATE_INVESTMENT", `Updated investment: ${id}`);
-  toast("Investment Updated", "Investment details updated successfully");
-
-  closeModal("modalViewer");
-  renderAdminInvestments();
-}
-
-function renderMemberInvestments() {
-  const db = ensureDB();
-  setPage("My Investments", "View all company investments");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Company Investments</h3>
-          <p>All investment projects of the company</p>
-        </div>
-      </div>
-
-      <div class="gridCards">
-        ${db.investments && db.investments.length > 0 ? db.investments.map(inv => `
-          <div class="card">
-            <div class="tag">${inv.status}</div>
-            <div class="title">${inv.name}</div>
-            <div class="value">${fmtMoney(inv.amount)}</div>
-            <div class="sub">
-              <div>Start: ${inv.startDate || 'N/A'}</div>
-              <div>Expected Return: ${inv.expectedReturn || 0}%</div>
-              <div>Responsible: ${inv.responsible || 'N/A'}</div>
-            </div>
-          </div>
-        `).join('') : `
-          <div class="card">
-            <div class="title">No Investments</div>
-            <div class="value">0</div>
-            <div class="sub">No investment projects available</div>
-          </div>
-        `}
-      </div>
-
-      <div class="hr"></div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Investment Name</th>
-            <th>Amount</th>
-            <th>Status</th>
-            <th>Start Date</th>
-            <th>Description</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.investments && db.investments.length > 0 ? db.investments.map(inv => `
-            <tr>
-              <td><b>${inv.name}</b></td>
-              <td>${fmtMoney(inv.amount)}</td>
-              <td><span class="status ${inv.status === 'ACTIVE' ? 'st-approved' : inv.status === 'COMPLETED' ? 'st-success' : 'st-pending'}">${inv.status}</span></td>
-              <td>${inv.startDate || 'N/A'}</td>
-              <td>${inv.description || 'No description'}</td>
-            </tr>
-          `).join('') : `<tr><td colspan="5" class="small">No investments found</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-}
-
-/* -----------------------------
-   Expenses Management
-------------------------------*/
-function renderAdminExpenses() {
-  const db = ensureDB();
-  setPage("Expenses Management", "Record and manage all expenses");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Add New Expense</h3>
-          <p>Record expense with voucher details</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Expense Title *</label>
-          <input id="exp_title" placeholder="Expense title" />
-        </div>
-        <div>
-          <label>Voucher ID (Auto)</label>
-          <input id="exp_voucher" value="${genId("VCH")}" disabled />
-        </div>
-        <div>
-          <label>Amount *</label>
-          <input id="exp_amount" type="number" placeholder="Enter amount" />
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Category</label>
-          <select id="exp_category">
-            <option value="OFFICE">Office Expense</option>
-            <option value="SALARY">Salary</option>
-            <option value="UTILITY">Utility Bill</option>
-            <option value="MAINTENANCE">Maintenance</option>
-            <option value="TRAVEL">Travel</option>
-            <option value="MARKETING">Marketing</option>
-            <option value="OTHER">Other</option>
-          </select>
-        </div>
-        <div>
-          <label>Date</label>
-          <input id="exp_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
-        </div>
-        <div>
-          <label>Payment Method</label>
-          <select id="exp_method">
-            <option value="CASH">Cash</option>
-            <option value="BANK">Bank Transfer</option>
-            <option value="BKASH">Bkash</option>
-            <option value="ROCKET">Rocket</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Description</label>
-          <textarea id="exp_desc" placeholder="Expense description..."></textarea>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Approved By</label>
-          <input id="exp_approved" placeholder="Approver name" />
-        </div>
-        <div>
-          <label>Receipt/Bill Upload</label>
-          <input id="exp_receipt" type="file" accept="image/*" />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="addExpenseBtn">Add Expense</button>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>All Expenses</h3>
-          <p>Total Expenses: ${fmtMoney(db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0)}</p>
-        </div>
-        <div class="panelTools">
-          <input id="expenseSearch" placeholder="Search expense..." />
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Voucher ID</th>
-            <th>Title</th>
-            <th>Amount</th>
-            <th>Category</th>
-            <th>Date</th>
-            <th>Payment Method</th>
-            <th>Tools</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.expenses && db.expenses.length > 0 ? db.expenses.map(exp => `
-            <tr>
-              <td>${exp.voucherId || 'N/A'}</td>
-              <td><b>${exp.title}</b><div class="small">${exp.description || ''}</div></td>
-              <td>${fmtMoney(exp.amount)}</td>
-              <td>${exp.category}</td>
-              <td>${exp.date || 'N/A'}</td>
-              <td>${exp.paymentMethod}</td>
-              <td>
-                <button class="btn view-expense" data-id="${exp.voucherId || exp.id}">View</button>
-              </td>
-            </tr>
-          `).join('') : `<tr><td colspan="7" class="small">No expenses found</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('addExpenseBtn').addEventListener('click', addExpense);
-  document.getElementById('expenseSearch').addEventListener('input', filterExpenses);
-
-  setTimeout(() => {
-    document.querySelectorAll('.view-expense').forEach(btn => {
-      btn.addEventListener('click', () => viewExpense(btn.getAttribute('data-id')));
-    });
-  }, 100);
-}
-
-async function addExpense() {
-  const db = ensureDB();
-
-  const title = document.getElementById("exp_title").value.trim();
-  const amount = Number(document.getElementById("exp_amount").value || 0);
-  const category = document.getElementById("exp_category").value;
-  const date = document.getElementById("exp_date").value;
-  const method = document.getElementById("exp_method").value;
-  const description = document.getElementById("exp_desc").value.trim();
-  const approvedBy = document.getElementById("exp_approved").value.trim();
-  const voucherId = genId("VCH");
-
-  if (!title || amount <= 0) {
-    toast("Validation Error", "Please enter expense title and valid amount");
-    return;
-  }
-
-  const receiptFile = document.getElementById("exp_receipt").files[0];
-  const receipt = receiptFile ? await fileToBase64(receiptFile) : "";
-
-  if (!db.expenses) db.expenses = [];
-
-  db.expenses.unshift({
-    id: "EXP-" + Date.now(),
-    voucherId,
-    title,
-    amount,
-    category,
-    date,
-    paymentMethod: method,
-    description,
-    approvedBy,
-    receipt,
-    createdAt: nowISO()
-  });
-
-  saveDB(db);
-  logActivity("ADD_EXPENSE", `Added expense: ${title} (${voucherId})`);
-  toast("Expense Added", `${title} recorded successfully`);
-
-  renderAdminExpenses();
-}
-
-function filterExpenses() {
-  const search = document.getElementById("expenseSearch").value.toLowerCase();
-  const rows = document.querySelectorAll("table tbody tr");
-
-  rows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    row.style.display = text.includes(search) ? "" : "none";
-  });
-}
-
-function viewExpense(voucherId) {
-  const db = ensureDB();
-  const exp = db.expenses.find(x => x.voucherId === voucherId || x.id === voucherId);
-  if (!exp) return;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>${exp.title} (${exp.voucherId})</h3>
-          <p>Expense Details</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Amount</label>
-          <input value="${fmtMoney(exp.amount)}" disabled />
-        </div>
-        <div>
-          <label>Category</label>
-          <input value="${exp.category}" disabled />
-        </div>
-        <div>
-          <label>Payment Method</label>
-          <input value="${exp.paymentMethod}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Date</label>
-          <input value="${exp.date || 'N/A'}" disabled />
-        </div>
-        <div>
-          <label>Approved By</label>
-          <input value="${exp.approvedBy || 'N/A'}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Description</label>
-          <textarea disabled>${exp.description || ''}</textarea>
-        </div>
-      </div>
-
-      ${exp.receipt ? `
-      <div class="row">
-        <div>
-          <label>Receipt/Bill</label>
-          <img src="${exp.receipt}" style="width:100%;max-width:300px;border-radius:12px;border:1px solid var(--line);" />
-        </div>
-      </div>
-      ` : ''}
-
-      <div class="row">
-        <div>
-          <label>Created At</label>
-          <input value="${new Date(exp.createdAt).toLocaleString()}" disabled />
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Expense Details";
-  document.getElementById("viewerSub").innerText = "View expense information";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
-}
-
-/* -----------------------------
-   Sales Management
-------------------------------*/
-function renderAdminSales() {
-  const db = ensureDB();
-  setPage("Sales Management", "Record and manage sales transactions");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Add New Sale</h3>
-          <p>Record sales transaction</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Sale Title *</label>
-          <input id="sale_title" placeholder="Sale title" />
-        </div>
-        <div>
-          <label>Sale ID (Auto)</label>
-          <input id="sale_id" value="SALE-${new Date().getFullYear()}-${String((db.sales ? db.sales.length : 0) + 1).padStart(6, '0')}" disabled />
-        </div>
-        <div>
-          <label>Amount *</label>
-          <input id="sale_amount" type="number" placeholder="Enter amount" />
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Customer Name</label>
-          <input id="sale_customer" placeholder="Customer name" />
-        </div>
-        <div>
-          <label>Date</label>
-          <input id="sale_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
-        </div>
-        <div>
-          <label>Payment Method</label>
-          <select id="sale_method">
-            <option value="CASH">Cash</option>
-            <option value="BANK">Bank Transfer</option>
-            <option value="BKASH">Bkash</option>
-            <option value="ROCKET">Rocket</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Description</label>
-          <textarea id="sale_desc" placeholder="Sale description..."></textarea>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="addSaleBtn">Add Sale</button>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>All Sales</h3>
-          <p>Total Sales: ${fmtMoney(db.sales ? db.sales.reduce((a, b) => a + Number(b.amount || 0), 0) : 0)}</p>
-        </div>
-        <div class="panelTools">
-          <input id="saleSearch" placeholder="Search sales..." />
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Sale ID</th>
-            <th>Title</th>
-            <th>Customer</th>
-            <th>Amount</th>
-            <th>Date</th>
-            <th>Payment Method</th>
-            <th>Tools</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.sales && db.sales.length > 0 ? db.sales.map(sale => `
-            <tr>
-              <td>${sale.id || 'N/A'}</td>
-              <td><b>${sale.title}</b><div class="small">${sale.description || ''}</div></td>
-              <td>${sale.customer || 'N/A'}</td>
-              <td>${fmtMoney(sale.amount)}</td>
-              <td>${sale.date || 'N/A'}</td>
-              <td>${sale.paymentMethod}</td>
-              <td>
-                <button class="btn view-sale" data-id="${sale.id}">View</button>
-              </td>
-            </tr>
-          `).join('') : `<tr><td colspan="7" class="small">No sales found</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('addSaleBtn').addEventListener('click', addSale);
-  document.getElementById('saleSearch').addEventListener('input', filterSales);
-
-  setTimeout(() => {
-    document.querySelectorAll('.view-sale').forEach(btn => {
-      btn.addEventListener('click', () => viewSale(btn.getAttribute('data-id')));
-    });
-  }, 100);
-}
-
-function addSale() {
-  const db = ensureDB();
-
-  const title = document.getElementById("sale_title").value.trim();
-  const amount = Number(document.getElementById("sale_amount").value || 0);
-  const customer = document.getElementById("sale_customer").value.trim();
-  const date = document.getElementById("sale_date").value;
-  const method = document.getElementById("sale_method").value;
-  const description = document.getElementById("sale_desc").value.trim();
-  const id = "SALE-" + Date.now();
-
-  if (!title || amount <= 0) {
-    toast("Validation Error", "Please enter sale title and valid amount");
-    return;
-  }
-
-  if (!db.sales) db.sales = [];
-
-  db.sales.unshift({
-    id,
-    title,
-    amount,
-    customer,
-    date,
-    paymentMethod: method,
-    description,
-    createdAt: nowISO()
-  });
-
-  saveDB(db);
-  logActivity("ADD_SALE", `Added sale: ${title} (${id})`);
-  toast("Sale Added", `${title} recorded successfully`);
-
-  renderAdminSales();
-}
-
-function filterSales() {
-  const search = document.getElementById("saleSearch").value.toLowerCase();
-  const rows = document.querySelectorAll("table tbody tr");
-
-  rows.forEach(row => {
-    const text = row.textContent.toLowerCase();
-    row.style.display = text.includes(search) ? "" : "none";
-  });
-}
-
-function viewSale(id) {
-  const db = ensureDB();
-  const sale = db.sales.find(x => x.id === id);
-  if (!sale) return;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>${sale.title} (${sale.id})</h3>
-          <p>Sale Details</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Amount</label>
-          <input value="${fmtMoney(sale.amount)}" disabled />
-        </div>
-        <div>
-          <label>Customer</label>
-          <input value="${sale.customer || 'N/A'}" disabled />
-        </div>
-        <div>
-          <label>Payment Method</label>
-          <input value="${sale.paymentMethod}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Date</label>
-          <input value="${sale.date || 'N/A'}" disabled />
-        </div>
-        <div>
-          <label>Created At</label>
-          <input value="${new Date(sale.createdAt).toLocaleString()}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Description</label>
-          <textarea disabled>${sale.description || ''}</textarea>
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Sale Details";
-  document.getElementById("viewerSub").innerText = "View sale information";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
-}
-
-/* -----------------------------
-   Profit Distribution
-------------------------------*/
-function renderAdminProfit() {
-  const db = ensureDB();
-  setPage("Profit Distribution", "Distribute profits to members based on shares");
-
-  const totalSales = db.sales ? db.sales.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const totalExpenses = db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const netProfit = totalSales - totalExpenses;
-  const totalShares = db.members ? db.members.filter(m => m.approved && m.status === "ACTIVE").reduce((a, b) => a + Number(b.shares || 0), 0) : 0;
-  const profitPerShare = totalShares > 0 ? netProfit / totalShares : 0;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Profit Distribution Summary</h3>
-          <p>Current profit status and distribution calculation</p>
-        </div>
-      </div>
-
-      <div class="gridCards">
-        <div class="card">
-          <div class="tag">Sales</div>
-          <div class="title">Total Sales</div>
-          <div class="value">${fmtMoney(totalSales)}</div>
-        </div>
-
-        <div class="card">
-          <div class="tag">Expenses</div>
-          <div class="title">Total Expenses</div>
-          <div class="value">${fmtMoney(totalExpenses)}</div>
-        </div>
-
-        <div class="card">
-          <div class="tag">Profit</div>
-          <div class="title">Net Profit</div>
-          <div class="value">${fmtMoney(netProfit)}</div>
-        </div>
-
-        <div class="card">
-          <div class="tag">Shares</div>
-          <div class="title">Total Shares</div>
-          <div class="value">${totalShares}</div>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row row-3">
-        <div>
-          <label>Profit Per Share</label>
-          <input value="${fmtMoney(profitPerShare)}" disabled />
-        </div>
-        <div>
-          <label>Distribution Date</label>
-          <input id="profit_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
-        </div>
-        <div>
-          <label>Distribution Period</label>
-          <select id="profit_period">
-            <option value="MONTHLY">Monthly</option>
-            <option value="QUARTERLY">Quarterly</option>
-            <option value="HALF_YEARLY">Half Yearly</option>
-            <option value="YEARLY">Yearly</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Notes</label>
-          <textarea id="profit_notes" placeholder="Distribution notes..."></textarea>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="distributeProfitBtn">Distribute Profit</button>
-      <div class="hint">This will distribute profit to all active members based on their shares</div>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Profit Distribution History</h3>
-          <p>Previous profit distributions</p>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Period</th>
-            <th>Total Profit</th>
-            <th>Profit Per Share</th>
-            <th>Total Shares</th>
-            <th>Notes</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.profitDistributions && db.profitDistributions.length > 0 ? db.profitDistributions.map(p => `
-            <tr>
-              <td>${p.date}</td>
-              <td>${p.period}</td>
-              <td>${fmtMoney(p.totalProfit)}</td>
-              <td>${fmtMoney(p.profitPerShare)}</td>
-              <td>${p.totalShares}</td>
-              <td>${p.notes || 'N/A'}</td>
-            </tr>
-          `).join('') : `<tr><td colspan="6" class="small">No profit distribution history</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('distributeProfitBtn').addEventListener('click', distributeProfit);
-}
-
-function distributeProfit() {
-  const db = ensureDB();
-
-  const totalSales = db.sales ? db.sales.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const totalExpenses = db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const netProfit = totalSales - totalExpenses;
-
-  if (netProfit <= 0) {
-    toast("No Profit", "There is no profit to distribute");
-    return;
-  }
-
-  const activeMembers = db.members ? db.members.filter(m => m.approved && m.status === "ACTIVE") : [];
-  const totalShares = activeMembers.reduce((a, b) => a + Number(b.shares || 0), 0);
-
-  if (totalShares === 0) {
-    toast("No Shares", "No active members with shares found");
-    return;
-  }
-
-  const profitPerShare = netProfit / totalShares;
-  const date = document.getElementById("profit_date").value;
-  const period = document.getElementById("profit_period").value;
-  const notes = document.getElementById("profit_notes").value.trim();
-
-  if (!db.profitDistributions) db.profitDistributions = [];
-
-  db.profitDistributions.unshift({
-    id: "PROFIT-" + Date.now(),
-    date,
-    period,
-    totalProfit: netProfit,
-    profitPerShare,
-    totalShares,
-    notes,
-    distributedBy: SESSION.user.id,
-    distributedAt: nowISO()
-  });
-
-  // Send notifications to members
-  activeMembers.forEach(member => {
-    const memberProfit = profitPerShare * Number(member.shares || 0);
-    const whatsappMsg = `Dear ${member.name},\nProfit has been distributed!\nYour Shares: ${member.shares}\nProfit Per Share: ${fmtMoney(profitPerShare)}\nYour Profit: ${fmtMoney(memberProfit)}\nPeriod: ${period}\nDate: ${date}`;
-    sendWhatsAppNotification(member.phone, whatsappMsg);
-  });
-
-  saveDB(db);
-  logActivity("DISTRIBUTE_PROFIT", `Distributed profit: ${fmtMoney(netProfit)} to ${activeMembers.length} members`);
-  toast("Profit Distributed", `Profit distributed to ${activeMembers.length} members`);
-
-  renderAdminProfit();
-}
-
-function renderMemberProfit() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-
-  setPage("My Profit & Shares", "View your profit earnings and share details");
-
-  const totalProfit = db.profitDistributions ? db.profitDistributions.reduce((total, p) => {
-    return total + (Number(p.profitPerShare) * Number(m.shares));
-  }, 0) : 0;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>My Profit Summary</h3>
-          <p>Your total profit earnings based on shares</p>
-        </div>
-      </div>
-
-      <div class="gridCards">
-        <div class="card">
-          <div class="tag">Shares</div>
-          <div class="title">My Shares</div>
-          <div class="value">${m.shares}</div>
-          <div class="sub">Share value: ${fmtMoney(db.meta.monthlyShareAmount)}</div>
-        </div>
-
-        <div class="card">
-          <div class="tag">Profit</div>
-          <div class="title">Total Profit Earned</div>
-          <div class="value">${fmtMoney(totalProfit)}</div>
-          <div class="sub">All time profit</div>
-        </div>
-
-        <div class="card">
-          <div class="tag">Value</div>
-          <div class="title">Share Value</div>
-          <div class="value">${fmtMoney(m.shares * db.meta.monthlyShareAmount)}</div>
-          <div class="sub">Current share value</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Profit Distribution History</h3>
-          <p>Your profit distribution records</p>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Period</th>
-            <th>Profit Per Share</th>
-            <th>My Shares</th>
-            <th>My Profit</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.profitDistributions && db.profitDistributions.length > 0 ? db.profitDistributions.map(p => {
-            const myProfit = Number(p.profitPerShare) * Number(m.shares);
-            return `
-              <tr>
-                <td>${p.date}</td>
-                <td>${p.period}</td>
-                <td>${fmtMoney(p.profitPerShare)}</td>
-                <td>${m.shares}</td>
-                <td><b>${fmtMoney(myProfit)}</b></td>
-              </tr>
-            `;
-          }).join('') : `<tr><td colspan="5" class="small">No profit distribution records</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-}
-
-/* -----------------------------
-   Resignation & Settlement
-------------------------------*/
-function renderAdminResign() {
-  const db = ensureDB();
-  setPage("Resignation & Settlement", "Manage member resignations and settlements");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Member Resignation</h3>
-          <p>Process member resignation and calculate settlement</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Select Member *</label>
-          <select id="resign_member">
-            <option value="">Select Member</option>
-            ${db.members ? db.members.filter(m => m.approved && m.status === "ACTIVE").map(m => `
-              <option value="${m.id}">${m.name} (${m.id})</option>
-            `).join('') : ''}
-          </select>
-        </div>
-        <div>
-          <label>Resignation Date</label>
-          <input id="resign_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
-        </div>
-        <div>
-          <label>Reason</label>
-          <select id="resign_reason">
-            <option value="PERSONAL">Personal Reason</option>
-            <option value="FINANCIAL">Financial Reason</option>
-            <option value="RELOCATION">Relocation</option>
-            <option value="OTHER">Other</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Details</label>
-          <textarea id="resign_details" placeholder="Resignation details..."></textarea>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="calculateSettlementBtn">Calculate Settlement</button>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Resignation History</h3>
-          <p>Previous member resignations</p>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Member</th>
-            <th>Resignation Date</th>
-            <th>Reason</th>
-            <th>Settlement Amount</th>
-            <th>Status</th>
-            <th>Tools</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.resignations && db.resignations.length > 0 ? db.resignations.map(r => {
-            const member = db.members.find(m => m.id === r.memberId);
-            return `
-              <tr>
-                <td>${member ? member.name : r.memberId}</td>
-                <td>${r.date}</td>
-                <td>${r.reason}</td>
-                <td>${fmtMoney(r.settlementAmount || 0)}</td>
-                <td><span class="status ${r.status === 'COMPLETED' ? 'st-approved' : 'st-pending'}">${r.status}</span></td>
-                <td>
-                  <button class="btn view-resignation" data-id="${r.id}">View</button>
-                </td>
-              </tr>
-            `;
-          }).join('') : `<tr><td colspan="6" class="small">No resignation records</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('calculateSettlementBtn').addEventListener('click', calculateSettlement);
-
-  setTimeout(() => {
-    document.querySelectorAll('.view-resignation').forEach(btn => {
-      btn.addEventListener('click', () => viewResignation(btn.getAttribute('data-id')));
-    });
-  }, 100);
-}
-
-function calculateSettlement() {
-  const db = ensureDB();
-
-  const memberId = document.getElementById("resign_member").value;
-  if (!memberId) {
-    toast("Validation Error", "Please select a member");
-    return;
-  }
-
-  const member = db.members.find(m => m.id === memberId);
-  if (!member) return;
-
-  // Calculate total deposits
-  const totalDeposits = db.deposits ? db.deposits
-    .filter(d => d.memberId === memberId && d.status === "APPROVED")
-    .reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-
-  // Calculate settlement (80% of total deposits as per policy)
-  const settlementAmount = totalDeposits * 0.8;
-
-  const resignationDate = document.getElementById("resign_date").value;
-  const reason = document.getElementById("resign_reason").value;
-  const details = document.getElementById("resign_details").value.trim();
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Settlement Calculation for ${member.name}</h3>
-          <p>Member ID: ${member.id}</p>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Total Approved Deposits</label>
-          <input value="${fmtMoney(totalDeposits)}" disabled />
-        </div>
-        <div>
-          <label>Settlement Percentage</label>
-          <input value="80%" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Settlement Amount</label>
-          <input value="${fmtMoney(settlementAmount)}" disabled />
-        </div>
-        <div>
-          <label>Resignation Date</label>
-          <input value="${resignationDate}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Reason</label>
-          <input value="${reason}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Details</label>
-          <textarea disabled>${details}</textarea>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="confirmResignationBtn">Confirm Resignation</button>
-      <div class="hint">This will mark the member as resigned and record the settlement</div>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Settlement Calculation";
-  document.getElementById("viewerSub").innerText = "Review settlement details";
-  document.getElementById("viewerBody").innerHTML = html;
-
-  document.getElementById('confirmResignationBtn').addEventListener('click', () => confirmResignation(memberId, {
-    totalDeposits,
-    settlementAmount,
-    resignationDate,
-    reason,
-    details
-  }));
-
-  openModal("modalViewer");
-}
-
-function confirmResignation(memberId, data) {
-  const db = ensureDB();
-  const member = db.members.find(m => m.id === memberId);
-
-  if (!member) return;
-
-  // Update member status
-  member.status = "RESIGNED";
-  member.updatedAt = nowISO();
-
-  // Record resignation
-  if (!db.resignations) db.resignations = [];
-
-  db.resignations.unshift({
-    id: "RESIGN-" + Date.now(),
-    memberId,
-    memberName: member.name,
-    date: data.resignationDate,
-    reason: data.reason,
-    details: data.details,
-    totalDeposits: data.totalDeposits,
-    settlementAmount: data.settlementAmount,
-    status: "COMPLETED",
-    processedBy: SESSION.user.id,
-    processedAt: nowISO()
-  });
-
-  saveDB(db);
-  logActivity("MEMBER_RESIGNATION", `Member resigned: ${memberId}, Settlement: ${fmtMoney(data.settlementAmount)}`);
-
-  // Send notification
-  const whatsappMsg = `Dear ${member.name},\nYour resignation has been processed.\nSettlement Amount: ${fmtMoney(data.settlementAmount)}\nTotal Deposits: ${fmtMoney(data.totalDeposits)}\nThank you for being with us.`;
-  sendWhatsAppNotification(member.phone, whatsappMsg);
-
-  toast("Resignation Processed", `${member.name} resigned successfully. Settlement: ${fmtMoney(data.settlementAmount)}`);
-  closeModal("modalViewer");
-  renderAdminResign();
-}
-
-function viewResignation(id) {
-  const db = ensureDB();
-  const resign = db.resignations.find(r => r.id === id);
-  if (!resign) return;
-
-  const member = db.members.find(m => m.id === resign.memberId);
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Resignation Details</h3>
-          <p>Member: ${member ? member.name : resign.memberId}</p>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Resignation Date</label>
-          <input value="${resign.date}" disabled />
-        </div>
-        <div>
-          <label>Reason</label>
-          <input value="${resign.reason}" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Total Deposits</label>
-          <input value="${fmtMoney(resign.totalDeposits)}" disabled />
-        </div>
-        <div>
-          <label>Settlement Amount</label>
-          <input value="${fmtMoney(resign.settlementAmount)}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Details</label>
-          <textarea disabled>${resign.details || ''}</textarea>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Processed By</label>
-          <input value="${resign.processedBy}" disabled />
-        </div>
-        <div>
-          <label>Processed At</label>
-          <input value="${new Date(resign.processedAt).toLocaleString()}" disabled />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Status</label>
-          <input value="${resign.status}" disabled />
-        </div>
-      </div>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Resignation Details";
-  document.getElementById("viewerSub").innerText = "View resignation information";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
-}
-
-/* -----------------------------
-   Notices Management
-------------------------------*/
-function renderAdminNotices() {
-  const db = ensureDB();
-  setPage("Notices Management", "Send notices to members");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Send New Notice</h3>
-          <p>Send notice to all members or specific members</p>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Notice Title *</label>
-          <input id="notice_title" placeholder="Notice title" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Notice Message *</label>
-          <textarea id="notice_message" placeholder="Notice message..." rows="5"></textarea>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Send To</label>
-          <select id="notice_to">
-            <option value="ALL">All Members</option>
-            <option value="FOUNDER">Founder Members Only</option>
-            <option value="REFERENCE">Reference Members Only</option>
-          </select>
-        </div>
-        <div>
-          <label>Priority</label>
-          <select id="notice_priority">
-            <option value="NORMAL">Normal</option>
-            <option value="HIGH">High</option>
-            <option value="URGENT">Urgent</option>
-          </select>
-        </div>
-        <div>
-          <label>Expiry Date</label>
-          <input id="notice_expiry" type="date" />
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="sendNoticeBtn">Send Notice</button>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Notice History</h3>
-          <p>Previously sent notices</p>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Date</th>
-            <th>Title</th>
-            <th>Sent To</th>
-            <th>Priority</th>
-            <th>Status</th>
-            <th>Tools</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.notices && db.notices.length > 0 ? db.notices.map(notice => `
-            <tr>
-              <td>${new Date(notice.createdAt).toLocaleDateString()}</td>
-              <td><b>${notice.title}</b><div class="small">${notice.message.substring(0, 50)}...</div></td>
-              <td>${notice.sentTo}</td>
-              <td><span class="status ${notice.priority === 'URGENT' ? 'st-rejected' : notice.priority === 'HIGH' ? 'st-pending' : 'st-approved'}">${notice.priority}</span></td>
-              <td>${notice.expiryDate && new Date(notice.expiryDate) < new Date() ? 'Expired' : 'Active'}</td>
-              <td>
-                <button class="btn view-notice" data-id="${notice.id}">View</button>
-              </td>
-            </tr>
-          `).join('') : `<tr><td colspan="6" class="small">No notices found</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('sendNoticeBtn').addEventListener('click', sendNotice);
-
-  setTimeout(() => {
-    document.querySelectorAll('.view-notice').forEach(btn => {
-      btn.addEventListener('click', () => viewNotice(btn.getAttribute('data-id')));
-    });
-  }, 100);
-}
-
-function sendNotice() {
-  const db = ensureDB();
-
-  const title = document.getElementById("notice_title").value.trim();
-  const message = document.getElementById("notice_message").value.trim();
-  const sentTo = document.getElementById("notice_to").value;
-  const priority = document.getElementById("notice_priority").value;
-  const expiryDate = document.getElementById("notice_expiry").value;
-
-  if (!title || !message) {
-    toast("Validation Error", "Please enter notice title and message");
-    return;
-  }
-
-  // Determine recipients
-  let recipients = [];
-  if (sentTo === "ALL") {
-    recipients = db.members ? db.members.filter(m => m.approved && m.status === "ACTIVE") : [];
-  } else if (sentTo === "FOUNDER") {
-    recipients = db.members ? db.members.filter(m => m.approved && m.status === "ACTIVE" && m.memberType === "FOUNDER") : [];
-  } else if (sentTo === "REFERENCE") {
-    recipients = db.members ? db.members.filter(m => m.approved && m.status === "ACTIVE" && m.memberType === "REFERENCE") : [];
-  }
-
-  if (!db.notices) db.notices = [];
-
-  const notice = {
-    id: "NOTICE-" + Date.now(),
-    title,
-    message,
-    sentTo,
-    priority,
-    expiryDate,
-    recipients: recipients.map(r => r.id),
-    sentBy: SESSION.user.id,
-    createdAt: nowISO()
-  };
-
-  db.notices.unshift(notice);
-
-  // Send notifications to recipients
-  recipients.forEach(member => {
-    const whatsappMsg = `Notice from IMS Investment:\n\n${title}\n\n${message}\n\nPriority: ${priority}\nSent on: ${new Date().toLocaleDateString()}`;
-    sendWhatsAppNotification(member.phone, whatsappMsg);
-  });
-
-  saveDB(db);
-  logActivity("SEND_NOTICE", `Sent notice to ${recipients.length} members: ${title}`);
-  toast("Notice Sent", `Notice sent to ${recipients.length} members`);
-
-  renderAdminNotices();
-}
-
-function viewNotice(id) {
-  const db = ensureDB();
-  const notice = db.notices.find(n => n.id === id);
-  if (!notice) return;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>${notice.title}</h3>
-          <p>Notice Details</p>
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Message</label>
-          <div style="padding:12px;background:rgba(255,255,255,0.03);border-radius:12px;border:1px solid var(--line);">
-            ${notice.message.replace(/\n/g, '<br>')}
-          </div>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Sent To</label>
-          <input value="${notice.sentTo}" disabled />
-        </div>
-        <div>
-          <label>Priority</label>
-          <input value="${notice.priority}" disabled />
-        </div>
-        <div>
-          <label>Recipients</label>
-          <input value="${notice.recipients ? notice.recipients.length : 0} members" disabled />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Sent By</label>
-          <input value="${notice.sentBy}" disabled />
-        </div>
-        <div>
-          <label>Sent Date</label>
-          <input value="${new Date(notice.createdAt).toLocaleString()}" disabled />
-        </div>
-      </div>
-
-      ${notice.expiryDate ? `
-      <div class="row">
-        <div>
-          <label>Expiry Date</label>
-          <input value="${notice.expiryDate}" disabled />
-        </div>
-      </div>
-      ` : ''}
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = "Notice Details";
-  document.getElementById("viewerSub").innerText = "View notice information";
-  document.getElementById("viewerBody").innerHTML = html;
-  openModal("modalViewer");
-}
-
-function renderMemberNotices() {
-  const db = ensureDB();
-  const m = db.members.find(x => x.id === SESSION.user.id);
-
-  setPage("Notices", "View all system notices");
-
-  // Filter notices for this member
-  const memberNotices = db.notices ? db.notices.filter(notice => {
-    if (notice.sentTo === "ALL") return true;
-    if (notice.sentTo === "FOUNDER" && m.memberType === "FOUNDER") return true;
-    if (notice.sentTo === "REFERENCE" && m.memberType === "REFERENCE") return true;
-    if (notice.recipients && notice.recipients.includes(m.id)) return true;
-    return false;
-  }) : [];
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>System Notices</h3>
-          <p>Important notices from management</p>
-        </div>
-      </div>
-
-      ${memberNotices.length > 0 ? memberNotices.map(notice => `
-        <div class="notice-item" style="margin-bottom:14px;padding:14px;border-radius:12px;border:1px solid var(--line);background:rgba(255,255,255,0.03);">
-          <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;">
-            <h4 style="margin:0;">${notice.title}</h4>
-            <span class="status ${notice.priority === 'URGENT' ? 'st-rejected' : notice.priority === 'HIGH' ? 'st-pending' : 'st-approved'}" style="font-size:11px;">
-              ${notice.priority}
-            </span>
-          </div>
-          <p style="margin-bottom:8px;color:var(--muted);">${notice.message.substring(0, 150)}...</p>
-          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--muted);">
-            <span>${new Date(notice.createdAt).toLocaleDateString()}</span>
-            <button class="btn view-notice-btn" data-id="${notice.id}" style="padding:4px 8px;font-size:11px;">Read More</button>
-          </div>
-        </div>
-      `).join('') : `
-        <div class="small" style="text-align:center;padding:20px;">
-          No notices available
-        </div>
-      `}
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  // Add event listeners to view buttons
-  setTimeout(() => {
-    document.querySelectorAll('.view-notice-btn').forEach(btn => {
-      btn.addEventListener('click', () => viewNotice(btn.getAttribute('data-id')));
-    });
-  }, 100);
-}
-
-/* -----------------------------
-   Reports
-------------------------------*/
-function renderAdminReports() {
-  const db = ensureDB();
-  setPage("Reports", "Generate and view system reports");
-
-  const totalMembers = db.members ? db.members.filter(m => m.approved).length : 0;
-  const activeMembers = db.members ? db.members.filter(m => m.status === "ACTIVE" && m.approved).length : 0;
-  const totalDeposit = db.deposits ? db.deposits.filter(d => d.status === "APPROVED").reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const totalExpense = db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const totalSales = db.sales ? db.sales.reduce((a, b) => a + Number(b.amount || 0), 0) : 0;
-  const netProfit = totalSales - totalExpense;
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Financial Reports</h3>
-          <p>Generate comprehensive financial reports</p>
-        </div>
-        <div class="panelTools">
-          <button class="btn primary" id="generateReportBtn">Generate Report</button>
-        </div>
-      </div>
-
-      <div class="gridCards">
-        <div class="card">
-          <div class="title">Members Report</div>
-          <div class="value">${totalMembers}</div>
-          <div class="sub">Active: ${activeMembers}</div>
-        </div>
-
-        <div class="card">
-          <div class="title">Deposits Report</div>
-          <div class="value">${fmtMoney(totalDeposit)}</div>
-          <div class="sub">Total approved deposits</div>
-        </div>
-
-        <div class="card">
-          <div class="title">Expenses Report</div>
-          <div class="value">${fmtMoney(totalExpense)}</div>
-          <div class="sub">All expenses</div>
-        </div>
-
-        <div class="card">
-          <div class="title">Profit Report</div>
-          <div class="value">${fmtMoney(netProfit)}</div>
-          <div class="sub">Net profit</div>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-
-      <div class="row row-2">
-        <div>
-          <label>Report Type</label>
-          <select id="report_type">
-            <option value="FINANCIAL">Financial Summary</option>
-            <option value="MEMBER">Member Report</option>
-            <option value="DEPOSIT">Deposit Report</option>
-            <option value="EXPENSE">Expense Report</option>
-            <option value="INVESTMENT">Investment Report</option>
-          </select>
-        </div>
-        <div>
-          <label>Date Range</label>
-          <select id="report_range">
-            <option value="ALL">All Time</option>
-            <option value="MONTH">This Month</option>
-            <option value="QUARTER">This Quarter</option>
-            <option value="YEAR">This Year</option>
-          </select>
-        </div>
-      </div>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Quick Statistics</h3>
-          <p>System performance metrics</p>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Metric</th>
-            <th>Value</th>
-            <th>Details</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td>Total Members</td>
-            <td>${totalMembers}</td>
-            <td>Active: ${activeMembers}, Pending: ${db.members ? db.members.filter(m => !m.approved).length : 0}</td>
-          </tr>
-          <tr>
-            <td>Total Deposits</td>
-            <td>${fmtMoney(totalDeposit)}</td>
-            <td>Pending: ${db.deposits ? db.deposits.filter(d => d.status === "PENDING").length : 0} deposits</td>
-          </tr>
-          <tr>
-            <td>Total Expenses</td>
-            <td>${fmtMoney(totalExpense)}</td>
-            <td>${db.expenses ? db.expenses.length : 0} expense records</td>
-          </tr>
-          <tr>
-            <td>Total Investments</td>
-            <td>${db.investments ? db.investments.length : 0}</td>
-            <td>Active: ${db.investments ? db.investments.filter(i => i.status === "ACTIVE").length : 0}</td>
-          </tr>
-          <tr>
-            <td>System Balance</td>
-            <td>${fmtMoney(totalDeposit - totalExpense)}</td>
-            <td>Deposits - Expenses</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('generateReportBtn').addEventListener('click', generateReport);
-}
-
-function generateReport() {
-  const db = ensureDB();
-  const reportType = document.getElementById("report_type").value;
-  const reportRange = document.getElementById("report_range").value;
-
-  let reportData = {};
-  let reportTitle = "";
-
-  switch(reportType) {
-    case "FINANCIAL":
-      reportTitle = "Financial Summary Report";
-      reportData = {
-        totalMembers: db.members ? db.members.filter(m => m.approved).length : 0,
-        totalDeposits: db.deposits ? db.deposits.filter(d => d.status === "APPROVED").reduce((a, b) => a + Number(b.amount || 0), 0) : 0,
-        totalExpenses: db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0,
-        totalSales: db.sales ? db.sales.reduce((a, b) => a + Number(b.amount || 0), 0) : 0,
-        netProfit: (db.sales ? db.sales.reduce((a, b) => a + Number(b.amount || 0), 0) : 0) - (db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0),
-        systemBalance: (db.deposits ? db.deposits.filter(d => d.status === "APPROVED").reduce((a, b) => a + Number(b.amount || 0), 0) : 0) - (db.expenses ? db.expenses.reduce((a, b) => a + Number(b.amount || 0), 0) : 0)
-      };
-      break;
-
-    case "MEMBER":
-      reportTitle = "Member Report";
-      reportData = {
-        totalMembers: db.members ? db.members.length : 0,
-        activeMembers: db.members ? db.members.filter(m => m.status === "ACTIVE" && m.approved).length : 0,
-        pendingMembers: db.members ? db.members.filter(m => !m.approved).length : 0,
-        founderMembers: db.members ? db.members.filter(m => m.memberType === "FOUNDER").length : 0,
-        referenceMembers: db.members ? db.members.filter(m => m.memberType === "REFERENCE").length : 0,
-        resignedMembers: db.members ? db.members.filter(m => m.status === "RESIGNED").length : 0
-      };
-      break;
-
-    case "DEPOSIT":
-      reportTitle = "Deposit Report";
-      const approvedDeposits = db.deposits ? db.deposits.filter(d => d.status === "APPROVED") : [];
-      const pendingDeposits = db.deposits ? db.deposits.filter(d => d.status === "PENDING") : [];
-      reportData = {
-        totalApproved: approvedDeposits.reduce((a, b) => a + Number(b.amount || 0), 0),
-        totalPending: pendingDeposits.reduce((a, b) => a + Number(b.amount || 0), 0),
-        countApproved: approvedDeposits.length,
-        countPending: pendingDeposits.length,
-        byMonth: approvedDeposits.reduce((acc, deposit) => {
-          acc[deposit.month] = (acc[deposit.month] || 0) + Number(deposit.amount || 0);
-          return acc;
-        }, {})
-      };
-      break;
-  }
-
-  const reportHTML = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>${reportTitle}</h3>
-          <p>Generated on: ${new Date().toLocaleString()}</p>
-          <p>Date Range: ${reportRange}</p>
-        </div>
-      </div>
-
-      <pre style="background:rgba(255,255,255,0.03);padding:14px;border-radius:12px;border:1px solid var(--line);overflow:auto;">
-${JSON.stringify(reportData, null, 2)}
-      </pre>
-
-      <div class="hr"></div>
-      <button class="btn primary" onclick="downloadReport('${reportType}', ${JSON.stringify(reportData).replace(/'/g, "\\'")})">Download Report</button>
-    </div>
-  `;
-
-  document.getElementById("viewerTitle").innerText = reportTitle;
-  document.getElementById("viewerSub").innerText = "Generated Report";
-  document.getElementById("viewerBody").innerHTML = reportHTML;
-  openModal("modalViewer");
-}
-
-function downloadReport(type, data) {
-  const content = JSON.stringify(data, null, 2);
-  const blob = new Blob([content], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `IMS_Report_${type}_${new Date().toISOString().split('T')[0]}.json`;
-  a.click();
-  toast("Report Downloaded", "Report file downloaded successfully");
-}
-
-/* -----------------------------
-   Admin Accounts
-------------------------------*/
-function renderAdminAdmins() {
-  const db = ensureDB();
-  setPage("Admin Accounts", "Manage admin users and permissions");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>Add New Admin</h3>
-          <p>Create new admin account with specific role</p>
-        </div>
-      </div>
-
-      <div class="row row-3">
-        <div>
-          <label>Admin ID (Auto)</label>
-          <input id="admin_id" value="ADM-${String((db.admins ? db.admins.length : 0) + 1).padStart(3, '0')}" disabled />
-        </div>
-        <div>
-          <label>Full Name *</label>
-          <input id="admin_name" placeholder="Admin full name" />
-        </div>
-        <div>
-          <label>Role *</label>
-          <select id="admin_role">
-            <option value="SUPER_ADMIN">Super Admin</option>
-            <option value="FINANCE_ADMIN">Finance Admin</option>
-            <option value="ACCOUNTS_ADMIN">Accounts Admin</option>
-            <option value="VIEW_ONLY">View Only</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Password *</label>
-          <input id="admin_pass" type="password" placeholder="Create password" />
-        </div>
-        <div>
-          <label>Confirm Password *</label>
-          <input id="admin_pass2" type="password" placeholder="Confirm password" />
-        </div>
-      </div>
-
-      <div class="row row-2">
-        <div>
-          <label>Phone Number</label>
-          <input id="admin_phone" placeholder="Phone number" />
-        </div>
-        <div>
-          <label>Email</label>
-          <input id="admin_email" placeholder="Email address" />
-        </div>
-      </div>
-
-      <div class="row">
-        <div>
-          <label>Status</label>
-          <select id="admin_status">
-            <option value="ACTIVE">Active</option>
-            <option value="INACTIVE">Inactive</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="hr"></div>
-      <button class="btn success" id="addAdminBtn">Add Admin</button>
-    </div>
-
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>All Admin Accounts</h3>
-          <p>Manage admin accounts and permissions</p>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Admin ID</th>
-            <th>Name</th>
-            <th>Role</th>
-            <th>Status</th>
-            <th>Created At</th>
-            <th>Tools</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.admins && db.admins.length > 0 ? db.admins.map(admin => `
-            <tr>
-              <td>${admin.id}</td>
-              <td><b>${admin.name}</b></td>
-              <td>${admin.role}</td>
-              <td><span class="status ${admin.active ? 'st-approved' : 'st-rejected'}">${admin.active ? 'ACTIVE' : 'INACTIVE'}</span></td>
-              <td>${new Date(admin.createdAt).toLocaleDateString()}</td>
-              <td>
-                ${admin.id !== SESSION.user.id ? `
-                  <button class="btn reset-admin-pass" data-id="${admin.id}">Reset Pass</button>
-                  <button class="btn warn toggle-admin-status" data-id="${admin.id}">${admin.active ? 'Deactivate' : 'Activate'}</button>
-                ` : '<span class="small">Current User</span>'}
-              </td>
-            </tr>
-          `).join('') : `<tr><td colspan="6" class="small">No admin accounts found</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('addAdminBtn').addEventListener('click', addAdmin);
-
-  setTimeout(() => {
-    document.querySelectorAll('.reset-admin-pass').forEach(btn => {
-      btn.addEventListener('click', () => resetAdminPassword(btn.getAttribute('data-id')));
-    });
-    document.querySelectorAll('.toggle-admin-status').forEach(btn => {
-      btn.addEventListener('click', () => toggleAdminStatus(btn.getAttribute('data-id')));
-    });
-  }, 100);
-}
-
-function addAdmin() {
-  const db = ensureDB();
-
-  const name = document.getElementById("admin_name").value.trim();
-  const role = document.getElementById("admin_role").value;
-  const pass = document.getElementById("admin_pass").value;
-  const pass2 = document.getElementById("admin_pass2").value;
-  const phone = document.getElementById("admin_phone").value.trim();
-  const email = document.getElementById("admin_email").value.trim();
-  const status = document.getElementById("admin_status").value;
-  const id = "ADM-" + String((db.admins ? db.admins.length : 0) + 1).padStart(3, '0');
-
-  if (!name || !pass) {
-    toast("Validation Error", "Please enter admin name and password");
-    return;
-  }
-
-  if (pass !== pass2) {
-    toast("Password Error", "Passwords do not match");
-    return;
-  }
-
-  if (!db.admins) db.admins = [];
-
-  db.admins.push({
-    id,
-    name,
-    role,
-    pass,
-    phone,
-    email,
-    active: status === "ACTIVE",
-    createdAt: nowISO()
-  });
-
-  saveDB(db);
-  logActivity("ADD_ADMIN", `Added admin: ${name} (${id})`);
-  toast("Admin Added", `${name} added as ${role}`);
-
-  renderAdminAdmins();
-}
-
-function resetAdminPassword(adminId) {
-  const db = ensureDB();
-  const admin = db.admins.find(a => a.id === adminId);
-  if (!admin) return;
-
-  const newPass = prompt(`Enter new password for ${admin.name}:`);
-  if (!newPass) return;
-
-  admin.pass = newPass;
-  saveDB(db);
-  logActivity("RESET_ADMIN_PASSWORD", `Password reset for admin: ${adminId}`);
-  toast("Password Reset", `Password updated for ${admin.name}`);
-}
-
-function toggleAdminStatus(adminId) {
-  const db = ensureDB();
-  const admin = db.admins.find(a => a.id === adminId);
-  if (!admin) return;
-
-  admin.active = !admin.active;
-  saveDB(db);
-  logActivity("TOGGLE_ADMIN_STATUS", `Admin ${adminId} ${admin.active ? 'activated' : 'deactivated'}`);
-  toast("Status Updated", `${admin.name} is now ${admin.active ? 'ACTIVE' : 'INACTIVE'}`);
-
-  renderAdminAdmins();
-}
-
-/* -----------------------------
-   Activity Logs
-------------------------------*/
-function renderAdminLogs() {
-  const db = ensureDB();
-  setPage("Activity Logs", "View system activity and user actions");
-
-  const html = `
-    <div class="panel">
-      <div class="panelHeader">
-        <div>
-          <h3>System Activity Logs</h3>
-          <p>All user actions and system events</p>
-        </div>
-        <div class="panelTools">
-          <button class="btn" id="clearLogsBtn">Clear Logs</button>
-        </div>
-      </div>
-
-      <table>
-        <thead>
-          <tr>
-            <th>Time</th>
-            <th>Action</th>
-            <th>Details</th>
-            <th>User ID</th>
-            <th>User Role</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${db.activityLogs && db.activityLogs.length > 0 ? db.activityLogs.map(log => `
-            <tr>
-              <td>${new Date(log.at).toLocaleString()}</td>
-              <td><b>${log.action}</b></td>
-              <td>${log.details}</td>
-              <td>${log.byId}</td>
-              <td>${log.byRole}</td>
-            </tr>
-          `).join('') : `<tr><td colspan="5" class="small">No activity logs found</td></tr>`}
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  document.getElementById("pageContent").innerHTML = html;
-
-  document.getElementById('clearLogsBtn').addEventListener('click', clearLogs);
-}
-
-function clearLogs() {
-  if (!confirm("Are you sure you want to clear all activity logs?")) return;
-
-  const db = ensureDB();
-  db.activityLogs = [];
-  saveDB(db);
-
-  toast("Logs Cleared", "All activity logs have been cleared");
-  renderAdminLogs();
-}
+// Initialize the app
+console.log('IMS ERP V6.0 - Firebase Edition Loaded');
+
+// Make functions available globally
+window.openModal = openModal;
+window.closeModal = closeModal;
+window.go = go;
+window.logout = logout;
+window.exportJSON = exportJSON;
+window.importJSONPrompt = importJSONPrompt;
+window.resetDemo = resetDemo;
+window.wipeAll = wipeAll;
+[file content end]
