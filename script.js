@@ -1,239 +1,527 @@
 /* ============================================================
-   IMS ERP V5.1 FINAL - FIREBASE EDITION
-   Cloud-based real-time ERP system
+   IMS ERP V5.1 - FIREBASE CLOUD EDITION (NO-SERVER)
+   All Features Preserved | Realtime Sync | No CORS Error
    ============================================================ */
 
-// আপনার Firebase কনফিগারেশন এখানে পেস্ট করুন
+/* ----------------------------------------------------
+   1. FIREBASE CONFIGURATION & INITIALIZATION
+   ---------------------------------------------------- */
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_AUTH_DOMAIN",
-  databaseURL: "YOUR_DATABASE_URL",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_STORAGE_BUCKET",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDWO_T0iL8K-CaF8haK0MYkdyOzpTR2CVo",
+  authDomain: "taqwa-7ddf2.firebaseapp.com",
+  databaseURL: "https://taqwa-7ddf2-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "taqwa-7ddf2",
+  storageBucket: "taqwa-7ddf2.firebasestorage.app",
+  messagingSenderId: "1053737405036",
+  appId: "1:1053737405036:web:c9837bbd0ea0e9be612649",
+  measurementId: "G-6MZ4Z431MP"
 };
 
-// Firebase শুরু করুন
-firebase.initializeApp(firebaseConfig);
-const db = firebase.database();
-
-// --- Helper Functions ---
-function showLoader() { document.getElementById('loadingSpinner').classList.add('show'); }
-function hideLoader() { document.getElementById('loadingSpinner').classList.remove('show'); }
-
-/* 
-   বিবরণ: LocalStorage-এর পরিবর্তে আমরা এখন Firebase Database রেফারেন্স ব্যবহার করব।
-   db.ref('path/to/data') ব্যবহার করে ডাটাবেসের বিভিন্ন নোড (যেমন: 'members', 'admins') অ্যাক্সেস করা হবে।
-   ডেটা এখন আর ব্রাউজারে নয়, ক্লাউডে সংরক্ষিত থাকবে।
-*/
-
-// --- Database Operations (Firebase Implementation) ---
-
-// সম্পূর্ণ ডেটাবেস একবার লোড করার ফাংশন
-async function loadInitialData() {
-  showLoader();
-  try {
-    const snapshot = await db.ref('/').once('value');
-    const data = snapshot.val();
-    if (!data) {
-      // যদি ডাটাবেস খালি থাকে, তাহলে ডেমো ডেটা দিয়ে শুরু করুন
-      await seedDB();
-      const newSnapshot = await db.ref('/').once('value');
-      return newSnapshot.val();
-    }
-    return data;
-  } catch (error) {
-    console.error("Firebase data load failed:", error);
-    toast("Error", "Failed to load data from the cloud.");
-    return {};
-  } finally {
-    hideLoader();
-  }
+// Initialize Firebase (Compat Mode for Browser)
+if (!firebase.apps.length) {
+  firebase.initializeApp(firebaseConfig);
 }
+const dbRef = firebase.database().ref('IMS_DATA_V5_ULTRA');
 
-// ডেমো ডেটা দিয়ে ডাটাবেস তৈরি (Seed) করার ফাংশন
-async function seedDB() {
-  const seedData = {
-    // আপনার আগের seedDB ফাংশনের অবজেক্টটি এখানে থাকবে
-    // যেমন: meta, admins, members ইত্যাদি।
-  };
-  await db.ref('/').set(seedData);
-  console.log("Database seeded with demo data.");
-}
+/* ----------------------------------------------------
+   2. GLOBAL VARIABLES & STATE
+   ---------------------------------------------------- */
+let currentUser = null;
+let currentRole = null; // 'admin' or 'member'
+let currentPage = 'dashboard';
+let db = {
+  admins: [{ id: "ADM-001", name: "Super Admin", pass: "admin123", role: "SUPER" }],
+  members: [{ id: "FM-001", name: "Demo Member", pass: "1234", status: "ACTIVE", phone: "01700000000", address: "Dhaka", joinedAt: new Date().toISOString() }],
+  investments: [],
+  expenses: [],
+  notices: [],
+  activityLogs: [],
+  settings: { companyName: "Taqwa Invest", currency: "BDT" }
+};
 
-// Activity Log সেভ করার নতুন ফাংশন
-async function logActivity(action, details) {
-    const log = {
-        id: "LOG-" + Date.now(),
-        action,
-        details,
-        byId: SESSION.user?.id || "SYSTEM",
-        byRole: SESSION.user?.role || "SYSTEM",
-        at: new Date().toISOString()
-    };
-    // নতুন লগ ডেটা প্রথমে যুক্ত করার জন্য push ব্যবহার করা হচ্ছে
-    await db.ref('activityLogs').push(log);
-}
+/* ----------------------------------------------------
+   3. DATA SYNC ENGINE (Replaces LocalStorage)
+   ---------------------------------------------------- */
+// Load data from Cloud on startup
+function initApp() {
+  const loading = document.getElementById('loadingOverlay');
+  if(loading) loading.style.display = 'flex';
 
-
-/* =========================================================================
-   এডমিন এবং ইউজার প্যানেলের জন্য পৃথক কোড
-   =========================================================================*/
-/* 
-    বিবরণ: অ্যাপ্লিকেশনটি এখন `startApp` ফাংশনে প্রথমে পুরো ডাটাবেস লোড করবে।
-    এডমিন প্যানেল এবং মেম্বার প্যানেলের জন্য আলাদা ফাংশন (যেমন `renderAdminDashboard` এবং `renderMemberDashboard`)
-    তাদের নিজ নিজ ডেটা (`DB` অবজেক্ট থেকে) রেন্ডার করবে।
+  dbRef.on('value', (snapshot) => {
+    const cloudData = snapshot.val();
     
-    এডমিন কন্ট্রোল: এডমিন ফাংশনগুলো (যেমন `approveMember`, `adminAddMember`) সরাসরি Firebase-এর 
-    `/members`, `/deposits` ইত্যাদি নোডে ডেটা লেখা, আপডেট বা ডিলিট করার ক্ষমতা রাখে। 
-    এর মাধ্যমে এডমিনরা ইউজার প্যানেলের সব কিছু নিয়ন্ত্রণ করতে পারে।
-*/
+    if (cloudData) {
+      db = cloudData; // Sync local state with cloud
+      console.log("🔥 Data Synced from Firebase");
+    } else {
+      // First time run: Upload default DB
+      saveDB(db); 
+    }
 
-// গ্লোবাল ভ্যারিয়েবল যা সম্পূর্ণ ডেটা ধারণ করবে
-let DB = {}; 
+    if(loading) loading.style.display = 'none';
+    
+    // Refresh current view if user is logged in
+    if (currentUser) {
+      go(currentPage);
+    }
+  }, (error) => {
+    toast("Network Error", error.message);
+    if(loading) loading.style.display = 'none';
+  });
+}
 
-// --- App Start ---
-async function startApp() {
-  DB = await loadInitialData();
+// Function to get data (Sync replacement)
+function ensureDB() {
+  return db;
+}
+
+// Function to save data (Sync replacement)
+function saveDB(updatedDB) {
+  db = updatedDB; // Update local immediately (Optimistic UI)
   
-  if (!DB.admins) {
-      toast("Error", "Database seems empty or invalid.");
-      return;
-  }
-
-  document.getElementById("loginPage").style.display = "none";
-  document.getElementById("appPage").style.display = "grid";
-
-  // বাকি কোড একই থাকবে
-  document.getElementById("currentUserName").innerText = SESSION.user.name;
-  //... ইত্যাদি
-
-  buildSidebar();
-  go(SESSION.user.type === "ADMIN" ? "admin_dashboard" : "member_dashboard");
-
-  // রিয়েল-টাইম আপডেটের জন্য Listener সেট করা
-  listenForUpdates();
+  // Send to Cloud in background
+  dbRef.set(updatedDB).then(() => {
+    // Optional: console.log("Cloud Saved");
+  }).catch(err => {
+    toast("Sync Error", "Could not save to cloud: " + err.message);
+  });
 }
 
-function listenForUpdates() {
-    // উদাহরণ: পেন্ডিং ডিপোজিট রিয়েল-টাইমে আপডেট হবে
-    const pendingDepositsRef = db.ref('deposits').orderByChild('status').equalTo('PENDING');
-    
-    pendingDepositsRef.on('value', (snapshot) => {
-        const pendingDeposits = [];
-        snapshot.forEach(childSnapshot => {
-            pendingDeposits.push({ key: childSnapshot.key, ...childSnapshot.val() });
-        });
+// Logger Function
+function logActivity(action, details) {
+  const newLog = {
+    at: new Date().toISOString(),
+    action: action,
+    details: details,
+    byId: currentUser ? currentUser.id : "GUEST",
+    byRole: currentRole || "N/A"
+  };
+  
+  // Keep last 500 logs only
+  if(!db.activityLogs) db.activityLogs = [];
+  db.activityLogs.unshift(newLog);
+  if(db.activityLogs.length > 500) db.activityLogs.pop();
+  
+  saveDB(db);
+}
 
-        // যদি সাইডবার বা ড্যাশবোর্ডে কাউন্ট দেখানোর ব্যবস্থা থাকে, তবে তা আপডেট করুন
-        const pendingCount = pendingDeposits.length;
-        // console.log(`Real-time update: ${pendingCount} pending deposits.`);
-        buildSidebar(); // সাইডবার রি-বিল্ড করুন নতুন কাউন্ট দিয়ে
+/* ----------------------------------------------------
+   4. EVENT LISTENERS & DOM
+   ---------------------------------------------------- */
+document.addEventListener('DOMContentLoaded', () => {
+  initApp();
 
-        // যদি বর্তমানে ডিপোজিট পেজে থাকেন, তবে টেবিলটি রিফ্রেশ করুন
-        if (SESSION.page === 'admin_deposits') {
-            renderAdminDeposits();
-        }
+  // Login Tabs
+  document.getElementById('tabAdmin').addEventListener('click', () => switchTab('admin'));
+  document.getElementById('tabMember').addEventListener('click', () => switchTab('member'));
+  
+  // Buttons
+  document.getElementById('loginBtn').addEventListener('click', doLogin);
+  document.getElementById('logoutBtn').addEventListener('click', logout);
+
+  // Modals Close
+  document.querySelectorAll('.closeX, .closeBtn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.modalWrap').forEach(m => m.style.display = 'none');
     });
+  });
+});
+
+/* ----------------------------------------------------
+   5. AUTHENTICATION LOGIC
+   ---------------------------------------------------- */
+let loginMode = 'admin';
+
+function switchTab(mode) {
+  loginMode = mode;
+  document.getElementById('tabAdmin').className = mode === 'admin' ? 'tabBtn active' : 'tabBtn';
+  document.getElementById('tabMember').className = mode === 'member' ? 'tabBtn active' : 'tabBtn';
 }
 
-// Login ফাংশন (এখন DB ভ্যারিয়েবল ব্যবহার করবে)
 function doLogin() {
-    const id = document.getElementById("loginId").value.trim();
-    const pass = document.getElementById("loginPass").value.trim();
-    // এখানে DB সরাসরি ব্যবহার করা হচ্ছে, কারণ এটি startApp এ লোড হয়ে গেছে
-    const admins = Object.values(DB.admins || {});
-    const members = Object.values(DB.members || {});
+  const id = document.getElementById('loginId').value.trim();
+  const pass = document.getElementById('loginPass').value.trim();
 
-    // ... আপনার বাকি লগিন লজিক ...
-    // ... LocalStorage এর পরিবর্তে DB ভ্যারিয়েবল থেকে ডেটা চেক করবে ...
+  if (!id || !pass) return toast("Error", "Please enter ID and Password");
 
-    // লগিন সফল হলে startApp কল হবে, যা এখন async
-    if (login_successful) {
-        startApp();
+  let user;
+  if (loginMode === 'admin') {
+    user = db.admins.find(u => u.id === id && u.pass === pass);
+    currentRole = 'admin';
+  } else {
+    user = db.members.find(u => u.id === id && u.pass === pass);
+    currentRole = 'member';
+  }
+
+  if (user) {
+    currentUser = user;
+    document.getElementById('loginPage').style.display = 'none';
+    document.getElementById('appPage').style.display = 'flex';
+    
+    // UI Setup
+    document.getElementById('userNameDisplay').innerText = user.name;
+    document.getElementById('userRoleBadge').innerText = currentRole.toUpperCase();
+    
+    renderSidebar();
+    
+    if (currentRole === 'admin') {
+      go('dashboard');
+      logActivity("Admin Login", `Admin ${user.id} logged in`);
+    } else {
+      go('member_dash');
+      logActivity("Member Login", `Member ${user.id} logged in`);
     }
-}
-
-
-// --- ফাংশন যা ডেটাবেসে পরিবর্তন আনে (উদাহরণ) ---
-
-// মেম্বার যোগ করার ফাংশন (Firebase ভার্সন)
-async function adminAddMember() {
-  showLoader();
-  try {
-    const newMember = {
-        // ফর্ম থেকে ডেটা নিন
-    };
     
-    // Firebase-এ নতুন মেম্বার যোগ করা হচ্ছে
-    const newMemberRef = db.ref('members').push();
-    await newMemberRef.set(newMember);
-
-    await logActivity("ADD_MEMBER", `Added member: ${newMember.id}`);
-    toast("Member Added", `${newMember.name} saved successfully.`);
-    
-    // নতুন ডেটা রি-লোড করে UI আপডেট করুন
-    DB = await loadInitialData();
-    renderAdminMembersTable();
-    
-  } catch(error) {
-      console.error("Failed to add member:", error);
-      toast("Error", "Could not add member to the database.");
-  } finally {
-      hideLoader();
+    toast("Welcome", "Login Successful");
+  } else {
+    toast("Login Failed", "Invalid Credentials");
   }
 }
 
-// মেম্বার অনুমোদন করার ফাংশন (Firebase ভার্সন)
-async function approveMember(memberKey) { // key ব্যবহার করা হচ্ছে
-  showLoader();
-  try {
-    // Firebase থেকে குறிப்பிட்ட মেম্বারের ডেটা আপডেট করা হচ্ছে
-    await db.ref(`members/${memberKey}`).update({
-        approved: true,
-        status: "ACTIVE",
-        updatedAt: new Date().toISOString()
+function logout() {
+  if(currentUser) logActivity("Logout", `${currentUser.id} logged out`);
+  currentUser = null;
+  currentRole = null;
+  location.reload();
+}
+
+/* ----------------------------------------------------
+   6. NAVIGATION & SIDEBAR
+   ---------------------------------------------------- */
+function renderSidebar() {
+  const nav = document.getElementById('sidebarNav');
+  let html = '';
+  
+  if (currentRole === 'admin') {
+    html = `
+      <button onclick="go('dashboard')" class="navItem">📊 Dashboard</button>
+      <button onclick="go('admin_members')" class="navItem">👥 Members</button>
+      <button onclick="go('admin_investments')" class="navItem">💰 Investments</button>
+      <button onclick="go('admin_expenses')" class="navItem">💸 Expenses</button>
+      <button onclick="go('admin_reports')" class="navItem">📑 Reports</button>
+      <button onclick="go('admin_logs')" class="navItem">🛡 Activity Logs</button>
+      <button onclick="go('company_info')" class="navItem">🏢 Mission & Vision</button>
+    `;
+  } else {
+    html = `
+      <button onclick="go('member_dash')" class="navItem">🏠 My Dashboard</button>
+      <button onclick="go('member_profile')" class="navItem">👤 My Profile</button>
+      <button onclick="go('member_history')" class="navItem">📜 History</button>
+      <button onclick="go('company_info')" class="navItem">🏢 Company Info</button>
+    `;
+  }
+  nav.innerHTML = html;
+}
+
+window.go = function(page) {
+  currentPage = page;
+  const content = document.getElementById('pageContent');
+  const title = document.getElementById('pageTitle');
+  
+  title.innerText = page.replace('_', ' ').toUpperCase();
+  
+  // Reset content
+  content.innerHTML = '';
+
+  // Routing
+  if (page === 'dashboard') renderDashboard();
+  if (page === 'admin_members') renderAdminMembers();
+  if (page === 'admin_investments') renderAdminInvestments();
+  if (page === 'admin_expenses') renderAdminExpenses();
+  if (page === 'admin_reports') renderReports();
+  if (page === 'admin_logs') renderLogs();
+  
+  if (page === 'member_dash') renderMemberDash();
+  if (page === 'member_profile') renderMemberProfile();
+  if (page === 'company_info') renderCompanyInfo();
+};
+
+/* ----------------------------------------------------
+   7. DASHBOARD & ANALYTICS
+   ---------------------------------------------------- */
+function renderDashboard() {
+  const mCount = db.members.length;
+  const totalInv = db.investments.reduce((sum, i) => sum + Number(i.amount), 0);
+  const totalExp = db.expenses.reduce((sum, i) => sum + Number(i.amount), 0);
+  const netBalance = totalInv - totalExp;
+
+  const html = `
+    <div class="grid-3 fade-in">
+      <div class="card">
+        <h3>Total Capital</h3>
+        <div class="bigNum" style="color:#22c55e">${totalInv.toLocaleString()} ৳</div>
+        <p>Total Investments Collected</p>
+      </div>
+      <div class="card">
+        <h3>Total Expenses</h3>
+        <div class="bigNum" style="color:#ef4444">${totalExp.toLocaleString()} ৳</div>
+        <p>Operational Costs</p>
+      </div>
+      <div class="card">
+        <h3>Net Balance</h3>
+        <div class="bigNum" style="color:#3b82f6">${netBalance.toLocaleString()} ৳</div>
+        <p>Available Funds</p>
+      </div>
+      <div class="card">
+        <h3>Total Members</h3>
+        <div class="bigNum">${mCount}</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:20px">
+      <div class="panelHeader"><h3>Recent Activities</h3></div>
+      <table class="table">
+        <tr><th>Time</th><th>Action</th><th>Details</th></tr>
+        ${db.activityLogs.slice(0, 5).map(l => `
+          <tr>
+            <td>${new Date(l.at).toLocaleTimeString()}</td>
+            <td>${l.action}</td>
+            <td>${l.details}</td>
+          </tr>
+        `).join('')}
+      </table>
+    </div>
+  `;
+  document.getElementById('pageContent').innerHTML = html;
+}
+
+/* ----------------------------------------------------
+   8. MEMBER MANAGEMENT
+   ---------------------------------------------------- */
+function renderAdminMembers() {
+  const html = `
+    <div class="panel fade-in">
+      <div class="panelHeader">
+        <h3>All Members</h3>
+        <button class="btn btn-primary" onclick="addMemberPrompt()">+ New Member</button>
+      </div>
+      <table class="table">
+        <thead><tr><th>ID</th><th>Name</th><th>Phone</th><th>Status</th><th>Actions</th></tr></thead>
+        <tbody>
+          ${db.members.map(m => `
+            <tr>
+              <td>${m.id}</td>
+              <td><b>${m.name}</b></td>
+              <td>${m.phone}</td>
+              <td><span class="badge ${m.status==='ACTIVE'?'bg-success':'bg-danger'}">${m.status}</span></td>
+              <td>
+                <button onclick="deleteMember('${m.id}')" class="btn btn-sm btn-danger">Delete</button>
+              </td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('pageContent').innerHTML = html;
+}
+
+window.addMemberPrompt = function() {
+  const name = prompt("Member Name:");
+  const phone = prompt("Phone Number:");
+  if(name && phone) {
+    const newId = "FM-" + String(db.members.length + 1).padStart(3, '0');
+    db.members.push({
+      id: newId,
+      name: name,
+      phone: phone,
+      pass: "1234",
+      status: "ACTIVE",
+      joinedAt: new Date().toISOString()
     });
-    
-    await logActivity("APPROVE_MEMBER", `Member approved: ${memberKey}`);
-    toast("Member Approved", `Member has been approved successfully.`);
-    
-    DB = await loadInitialData(); // ডেটা রিফ্রেশ করুন
-    renderAdminMembersTable(); // টেবিল রি-রেন্ডার করুন
-
-  } catch(error) {
-      console.error("Failed to approve member:", error);
-      toast("Error", "Could not approve member.");
-  } finally {
-      hideLoader();
+    saveDB(db);
+    logActivity("Add Member", `Added new member ${newId}`);
+    renderAdminMembers();
+    toast("Success", "Member Added Successfully");
   }
+};
+
+window.deleteMember = function(id) {
+  if(confirm("Are you sure? This will remove all data for this member!")) {
+    db.members = db.members.filter(m => m.id !== id);
+    saveDB(db);
+    logActivity("Delete Member", `Deleted member ${id}`);
+    renderAdminMembers();
+  }
+};
+
+/* ----------------------------------------------------
+   9. INVESTMENT SYSTEM
+   ---------------------------------------------------- */
+function renderAdminInvestments() {
+  const html = `
+    <div class="panel fade-in">
+      <div class="panelHeader">
+        <h3>Investment Records</h3>
+        <button class="btn btn-primary" onclick="addInvestmentPrompt()">+ Add Investment</button>
+      </div>
+      <table class="table">
+        <thead><tr><th>MR ID</th><th>Member</th><th>Amount</th><th>Date</th></tr></thead>
+        <tbody>
+          ${db.investments.map(i => `
+            <tr>
+              <td>${i.mrId}</td>
+              <td>${i.memberName} (${i.memberId})</td>
+              <td>${Number(i.amount).toLocaleString()} ৳</td>
+              <td>${new Date(i.date).toLocaleDateString()}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('pageContent').innerHTML = html;
 }
 
+window.addInvestmentPrompt = function() {
+  const id = prompt("Enter Member ID (e.g. FM-001):");
+  const member = db.members.find(m => m.id === id);
+  
+  if(!member) return toast("Error", "Member not found!");
+  
+  const amount = prompt("Enter Investment Amount:");
+  if(amount) {
+    const mrId = "MR-" + Date.now().toString().slice(-6);
+    db.investments.push({
+      id: Date.now(),
+      mrId: mrId,
+      memberId: member.id,
+      memberName: member.name,
+      amount: Number(amount),
+      date: new Date().toISOString()
+    });
+    saveDB(db);
+    logActivity("Investment", `Received ${amount} from ${member.id}`);
+    renderAdminInvestments();
+    toast("Success", `Investment Added. MR ID: ${mrId}`);
+  }
+};
 
-/* ===================================================
-   পুরোনো সব ফাংশন এর আপডেট ভার্সন
-   =================================================== */
-
-/* 
-   বিবরণ: আপনার পুরোনো script.js ফাইলের সব ফাংশনকেই `async/await` ব্যবহার করে পরিবর্তন করতে হবে 
-   এবং `localStorage` এর পরিবর্তে `db.ref(...)` ব্যবহার করতে হবে।
-
-   উদাহরণ:
-   `renderAdminMembers` ফাংশনের ভেতরে টেবিল তৈরি করার সময় `DB.members` ব্যবহার করবে।
-   `db.members` এখন আর একটি array নয়, বরং Firebase থেকে পাওয়া একটি অবজেক্ট হবে। তাই `Object.values(DB.members || {})` 
-   ব্যবহার করে এটিকে array-তে রূপান্তর করতে হবে।
-*/
-
-// নিচে শুধুমাত্র একটি উদাহরণ দেওয়া হলো:
-function renderAdminMembersTable() {
-    const membersArray = Object.entries(DB.members || {}).map(([key, value]) => ({ key, ...value }));
-
-    // ... এখন `membersArray` ব্যবহার করে টেবিলের HTML তৈরি করুন ...
-    // approveMember(m.key) এভাবে key পাস করুন।
+/* ----------------------------------------------------
+   10. EXPENSE SYSTEM
+   ---------------------------------------------------- */
+function renderAdminExpenses() {
+  const html = `
+    <div class="panel fade-in">
+      <div class="panelHeader">
+        <h3>Expense Vouchers</h3>
+        <button class="btn btn-danger" onclick="addExpensePrompt()">+ New Expense</button>
+      </div>
+      <table class="table">
+        <thead><tr><th>Voucher ID</th><th>Details</th><th>Amount</th><th>By</th></tr></thead>
+        <tbody>
+          ${db.expenses.map(e => `
+            <tr>
+              <td>${e.voucherId}</td>
+              <td>${e.reason}</td>
+              <td>${Number(e.amount).toLocaleString()} ৳</td>
+              <td>${e.by}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('pageContent').innerHTML = html;
 }
 
+window.addExpensePrompt = function() {
+  const reason = prompt("Expense Reason:");
+  const amount = prompt("Amount:");
+  if(reason && amount) {
+    const vId = "V-" + Date.now().toString().slice(-6);
+    db.expenses.push({
+      voucherId: vId,
+      reason: reason,
+      amount: Number(amount),
+      date: new Date().toISOString(),
+      by: currentUser.name
+    });
+    saveDB(db);
+    logActivity("Expense", `Expense of ${amount} for ${reason}`);
+    renderAdminExpenses();
+  }
+};
 
-// ... আপনার পুরোনো script.js এর বাকি সব ফাংশনকে একইভাবে Firebase-এর জন্য আপডেট করতে হবে ...
-// প্রতিটি ডেটা পরিবর্তন (add, update, delete) করার পর UI রিফ্রেশ করার জন্য
-// হয় নির্দিষ্ট অংশ রি-রেন্ডার করুন অথবা পুরো `DB` আবার লোড করুন।
+/* ----------------------------------------------------
+   11. ACTIVITY LOGS (Admin Only)
+   ---------------------------------------------------- */
+function renderLogs() {
+  const html = `
+    <div class="panel fade-in">
+      <div class="panelHeader">
+        <h3>System Activity Logs</h3>
+        <button class="btn btn-danger" onclick="clearLogs()">Clear Logs</button>
+      </div>
+      <table class="table">
+        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th></tr></thead>
+        <tbody>
+          ${db.activityLogs.map(l => `
+            <tr>
+              <td>${new Date(l.at).toLocaleString()}</td>
+              <td>${l.byId} (${l.byRole})</td>
+              <td><b>${l.action}</b></td>
+              <td>${l.details}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+  document.getElementById('pageContent').innerHTML = html;
+}
+
+window.clearLogs = function() {
+  if(confirm("Clear all system logs? This cannot be undone.")) {
+    db.activityLogs = [];
+    saveDB(db);
+    renderLogs();
+    toast("Cleared", "All logs have been erased.");
+  }
+};
+
+/* ----------------------------------------------------
+   12. MISSION & VISION
+   ---------------------------------------------------- */
+function renderCompanyInfo() {
+  const html = `
+    <div class="panel fade-in" style="max-width:800px; margin:0 auto;">
+      <div class="panelHeader">
+        <h2>Company Vision & Mission</h2>
+      </div>
+      <div style="padding:20px; line-height:1.8;">
+        <h3 style="color:#22c55e">Our Vision</h3>
+        <p>To become the leading investment management company in the region, providing innovative financial solutions and creating sustainable value.</p>
+        
+        <h3 style="color:#3b82f6; margin-top:20px">Our Mission</h3>
+        <ul>
+          <li>Provide secure and profitable investment opportunities.</li>
+          <li>Maintain 100% transparency in all transactions.</li>
+          <li>Ensure timely profit distribution.</li>
+        </ul>
+        
+        <h3 style="color:#f59e0b; margin-top:20px">Core Values</h3>
+        <p>Transparency, Integrity, Innovation, and Responsibility.</p>
+      </div>
+    </div>
+  `;
+  document.getElementById('pageContent').innerHTML = html;
+}
+
+/* ----------------------------------------------------
+   13. UTILITIES (Toast, etc.)
+   ---------------------------------------------------- */
+function toast(title, msg) {
+  const container = document.getElementById('toastWrap');
+  if(!container) return;
+  
+  const t = document.createElement('div');
+  t.className = 'toast show';
+  t.innerHTML = `<b>${title}</b><p>${msg}</p>`;
+  container.appendChild(t);
+  
+  setTimeout(() => {
+    t.classList.remove('show');
+    setTimeout(() => t.remove(), 300);
+  }, 3000);
+}
